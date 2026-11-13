@@ -37,11 +37,11 @@ function ensureLeaflet():Promise<LeafletApi>{
 }
 function formatMapPrice(value:number){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(value);}
 function escapeMapHtml(value:string){return value.replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]||char));}
-function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug">){
+function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category">){
   const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
   const slug=store.brand_slug||(name.toLowerCase().includes("drogasil")?"drogasil":name.toLowerCase().includes("globo")?"globo":name.toLowerCase().includes("pague menos")?"pague-menos":"");
   const initials=slug==="pague-menos"?"PM":slug==="globo"?"G":slug==="drogasil"?"D":name.trim().charAt(0).toUpperCase()||"L";
-  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":"#7200FF";
+  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":store.category==="Mercado"?"#159A63":store.category==="Restaurante"?"#D97706":"#7200FF";
   return {name,slug,initials,color};
 }
 
