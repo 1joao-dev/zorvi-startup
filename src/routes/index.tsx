@@ -159,6 +159,7 @@ function App() {
   const [searchProductCategory, setSearchProductCategory] = useState<string|null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadError, setMapLoadError] = useState("");
+  const [mapInstanceKey, setMapInstanceKey] = useState(0);
   const [selectedMapStore, setSelectedMapStore] = useState<MapStore|null>(null);
   const mapContainerRef = useRef<HTMLDivElement|null>(null);
   const leafletMapRef = useRef<LeafletMap|null>(null);
@@ -546,7 +547,7 @@ function App() {
       setMapReady(false);
       setSelectedMapStore(null);
     };
-  }, [tab]);
+  }, [tab, mapInstanceKey]);
 
   useEffect(() => {
     if (mapReady && userLocation && leafletMapRef.current) {
@@ -638,13 +639,13 @@ function App() {
             <div className="zorvi-map-topline"><span>MAPA INTERATIVO</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} pontos no mapa</span></div>
             <div ref={mapContainerRef} className="zorvi-leaflet-map" aria-label="Mapa interativo de estabelecimentos e preços"/>
             {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b></div>}
-            {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setTab("map")}>Tentar novamente</button></div>}
+            {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
             <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={17}/></button>
             <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácia</span><span><i className="legend-market"/> Mercado</span><span><i className="legend-other"/> Outros</span></div>
           </div>
           <div className="nearby-head"><div><p className="eyebrow">{searchPerformed?"LOJAS QUE COMBINAM COM SUA BUSCA":"ESTABELECIMENTOS CADASTRADOS"}</p><h2>{mapStores.length} locais encontrados</h2></div><button className="text-link" onClick={()=>void loadNearbyStores()}>Atualizar</button></div>
           <div className="place-list">{mapStores.map(s=>{const brand=getStoreBrand(s);return <div className="place-row" key={s.id}><span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}>{s.brand_logo_url?<img src={s.brand_logo_url} alt={brand.name}/>:brand.initials}</span><span className="place-info"><b>{s.brand_name||s.name}</b><small>{s.address} · {s.city}</small></span><span className="place-distance">{typeof s.mapPrice==="number"?formatMapPrice(s.mapPrice):s.distance===null?"Localização pendente":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={s.latitude!==null&&s.longitude!==null?`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`:`https://www.openstreetmap.org/search?query=${encodeURIComponent(`${s.address}, ${s.city}, ${s.state}, Brasil`)}`} target="_blank" rel="noreferrer" aria-label="Ver endereço no mapa"><ArrowRight size={16}/></a></div>;})}{storeError?<p className="empty-state">{storeError}</p>:!catalogLoading&&mapStores.length===0&&<p className="empty-state">Nenhum estabelecimento encontrado nesta categoria.</p>}</div>
-          {selectedMapStore&&<div className="map-selected-store"><button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={16}/></button><span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as React.CSSProperties}>{getStoreBrand(selectedMapStore).initials}</span><div className="place-info"><b>{selectedMapStore.brand_name||selectedMapStore.name}</b><small>{selectedMapStore.address} · {selectedMapStore.city}</small>{typeof selectedMapStore.mapPrice==="number"?<strong>{formatMapPrice(selectedMapStore.mapPrice)} <small>· preço confirmado</small></strong>:searchPerformed?<small>Preço ainda não confirmado para esta unidade.</small>:null}</div>{selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}</div>}
+          {selectedMapStore&&<div className="map-selected-store"><button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={16}/></button><span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}>{getStoreBrand(selectedMapStore).initials}</span><div className="place-info"><b>{selectedMapStore.brand_name||selectedMapStore.name}</b><small>{selectedMapStore.address} · {selectedMapStore.city}</small>{typeof selectedMapStore.mapPrice==="number"?<strong>{formatMapPrice(selectedMapStore.mapPrice)} <small>· preço confirmado</small></strong>:searchPerformed?<small>Preço ainda não confirmado para esta unidade.</small>:null}</div>{selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}</div>}
           {searchPerformed&&<div className="price-results"><div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO</p><h2>{priceResults.length} preços verificados</h2></div></div>{priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.source_label}</small><small>Consultado em {new Date(r.observed_at).toLocaleString("pt-BR")}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}{priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}</div>}
           <p className="demo-note">Os preços precisam de fonte e verificação. Ainda não há integração automática com sites de farmácias.</p>
         </section>}
