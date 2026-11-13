@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { AuthScreen } from "@/components/AuthScreen";
-import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, MessageCircle, Moon, MoreHorizontal, Pencil, Plus, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
+import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, LocateFixed, MessageCircle, Moon, MoreHorizontal, Pencil, Plus, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
+type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number; longitude:number; website_url:string|null };
+type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null} };
 const demoPlaces = [
   { name: "Mercado Pão de Açúcar", type: "Mercado", distance: "450 m", icon: ShoppingBag },
   { name: "Farmácia do Povo", type: "Farmácia", distance: "650 m", icon: Plus },
@@ -111,6 +113,12 @@ function App() {
   const [dark, setDark] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todos");
+  const [userLocation, setUserLocation] = useState<{lat:number;lon:number}|null>(null);
+  const [locationStatus, setLocationStatus] = useState("Ative o GPS para encontrar lojas próximas.");
+  const [stores, setStores] = useState<Store[]>([]);
+  const [priceResults, setPriceResults] = useState<PriceResult[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [searchPerformed, setSearchPerformed] = useState(false);
   const [saved, setSaved] = useState<number[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -320,8 +328,38 @@ function App() {
     else { setCommentText(""); await openComments(commentsPost); await loadFeed(); }
     setCommentSending(false);
   };
-  const filtered = demoPlaces.filter((p) => (filter === "Todos" || p.type === filter) && (p.name.toLowerCase().includes(query.toLowerCase()) || p.type.toLowerCase().includes(query.toLowerCase())));
-
+  const requestLocation = () => {
+    if (!navigator.geolocation) { setLocationStatus("Geolocalização não disponível neste dispositivo."); return; }
+    setLocationStatus("Obtendo sua localização...");
+    navigator.geolocation.getCurrentPosition(({coords}) => {
+      setUserLocation({lat:coords.latitude,lon:coords.longitude}); setLocationStatus("Localização atualizada.");
+    }, error => setLocationStatus(error.code===error.PERMISSION_DENIED?"Permissão negada. Ative a localização no navegador.":"Não foi possível obter sua localização."), {enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+  };
+  useEffect(()=>{if(tab==="map"&&!userLocation)requestLocation();},[tab]);
+  const loadNearbyStores = async () => {
+    if(!supabase)return;
+    setCatalogLoading(true);
+    try { const {data,error}=await supabase.from("stores").select("id,name,category,address,city,state,latitude,longitude,website_url").eq("verification_status","verified").limit(500); if(error)throw error; setStores((data||[]) as Store[]); }
+    catch(e){notify(e&&typeof e==="object"&&"message" in e?String((e as {message?:unknown}).message||""):"Falha ao carregar lojas.");}
+    finally{setCatalogLoading(false);}
+  };
+  useEffect(()=>{if(tab==="map")void loadNearbyStores();},[tab]);
+  const distanceKm=(a:number,b:number,c:number,d:number)=>{const rad=(v:number)=>v*Math.PI/180;const x=rad(c-a),y=rad(d-b);const h=Math.sin(x/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)**2;return 6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));};
+  const nearbyStores=useMemo(()=>stores.filter(s=>filter==="Todos"||s.category===filter).map(s=>({...s,distance:userLocation?distanceKm(userLocation.lat,userLocation.lon,s.latitude,s.longitude):null})).filter(s=>s.distance===null||s.distance<=20).sort((a,b)=>(a.distance??999)-(b.distance??999)),[stores,filter,userLocation]);
+  const searchPrices=async()=>{
+    if(!supabase||!query.trim())return;setCatalogLoading(true);setSearchPerformed(true);
+    try{
+      const {data:products,error}=await supabase.from("products").select("id,name,brand,variant,unit").ilike("normalized_name","%"+query.trim()+"%").limit(20);if(error)throw error;
+      const ids=(products||[]).map(p=>p.id);if(!ids.length){setPriceResults([]);return;}
+      const {data,error:priceError}=await supabase.from("price_observations").select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url),products(id,name,brand,variant,unit)").in("product_id",ids).eq("verification_status","verified").order("price",{ascending:true}).limit(100);
+      if(priceError)throw priceError;
+      const rows=(data||[]).map((p:any)=>({...p,store:p.stores,product:p.products})).filter((p:any)=>p.store&&(!userLocation||distanceKm(userLocation.lat,userLocation.lon,p.store.latitude,p.store.longitude)<=20)).sort((a:any,b:any)=>a.price-b.price);
+      setPriceResults(rows as PriceResult[]);
+    }catch(e){notify(e&&typeof e==="object"&&"message" in e?String((e as {message?:unknown}).message||""):"Erro ao comparar preços.");}
+    finally{setCatalogLoading(false);}
+  };
+  const filtered=nearbyStores.filter(p=>p.name.toLowerCase().includes(query.toLowerCase())||p.category.toLowerCase().includes(query.toLowerCase()));
+  
   if (isSupabaseConfigured && authLoading) return <div className="zorvi-auth-loading"><img src="/zorvi-mark.webp" alt="ZORVI"/><span>Preparando sua experiência...</span></div>;
   if (isSupabaseConfigured && !session) return <AuthScreen />;
 
@@ -345,13 +383,16 @@ function App() {
           <p className="demo-note">Conteúdo demonstrativo · ofertas e locais reais serão conectados futuramente.</p>
         </section>}
         {tab === "map" && <section className="screen">
-          <div className="screen-title"><div><p className="eyebrow">DESCUBRA AO REDOR</p><h1>Mapa inteligente</h1><p>Encontre o que importa, perto de você.</p></div></div>
-          <div className="map-search"><Search size={18}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar lugares ou categorias"/><button onClick={() => setQuery("")}><X size={16}/></button></div>
-          <div className="filter-row">{["Todos","Mercado","Farmácia","Restaurante","Lojas"].map((f) => <button key={f} className={filter === f ? "filter-chip selected" : "filter-chip"} onClick={() => setFilter(f)}>{f}</button>)}</div>
-          <div className="map-visual"><div className="map-grid-lines"/><div className="map-river"/><span className="map-label label-one">CENTRO</span><span className="map-label label-two">JÓQUEI</span><span className="map-label label-three">FÁTIMA</span><span className="map-road road-one"/><span className="map-road road-two"/><span className="map-road road-three"/><div className="map-pin pin-one"><ShoppingBag size={15}/></div><div className="map-pin pin-two"><Utensils size={15}/></div><div className="map-pin pin-three"><Plus size={15}/></div><div className="map-pin pin-four"><Wallet size={15}/></div><div className="you-pin"><span/></div><div className="map-current">Você está aqui</div><button className="map-locate" onClick={() => notify("Localização demonstrativa ativada")}><MapPin size={18}/></button><div className="map-caption">MAPA ILUSTRATIVO · TERESINA, PI</div></div>
-          <div className="nearby-head"><div><p className="eyebrow">SELEÇÃO ZORVI</p><h2>{filtered.length} lugares por perto</h2></div></div>
-          <div className="place-list">{filtered.map((p) => { const Icon = p.icon; return <button className="place-row" key={p.name} onClick={() => notify(p.name + " · local demonstrativo")}><span className="place-icon"><Icon size={19}/></span><span className="place-info"><b>{p.name}</b><small>{p.type} · Local demonstrativo</small></span><span className="place-distance">{p.distance}</span><ArrowRight size={16}/></button>; })}{filtered.length === 0 && <p className="empty-state">Nenhum lugar encontrado.</p>}</div>
-          <p className="demo-note">Pontos e distâncias ilustrativos. Mapbox e localização real serão integrados em uma próxima etapa.</p>
+          <div className="screen-title"><div><p className="eyebrow">COMPARE ANTES DE SAIR</p><h1>Mapa de preços</h1><p>Encontre estabelecimentos próximos e compare preços confirmados.</p></div></div>
+          <div className="map-search"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?"/><button onClick={()=>setQuery("")}><X size={16}/></button></div>
+          <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>{catalogLoading?"Pesquisando...":"Comparar preços"} <Search size={16}/></button>
+          <div className="location-status"><span>{locationStatus}</span><button onClick={requestLocation}><LocateFixed size={15}/> Usar GPS</button></div>
+          <div className="filter-row">{["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}</div>
+          {userLocation?<div className="map-visual real-map"><iframe title="Mapa OpenStreetMap" src={`https://www.openstreetmap.org/export/embed.html?bbox=${userLocation.lon-0.025}%2C${userLocation.lat-0.018}%2C${userLocation.lon+0.025}%2C${userLocation.lat+0.018}&layer=mapnik&marker=${userLocation.lat}%2C${userLocation.lon}`} loading="lazy"/><a className="map-external-link" href={`https://www.openstreetmap.org/?mlat=${userLocation.lat}&mlon=${userLocation.lon}#map=15/${userLocation.lat}/${userLocation.lon}`} target="_blank" rel="noreferrer">Abrir mapa completo</a></div>:<div className="map-location-placeholder"><MapPin size={25}/><b>Ative sua localização</b><span>O mapa será centralizado onde você está.</span></div>}
+          <div className="nearby-head"><div><p className="eyebrow">ESTABELECIMENTOS CADASTRADOS</p><h2>{nearbyStores.length} locais encontrados</h2></div><button className="text-link" onClick={()=>void loadNearbyStores()}>Atualizar</button></div>
+          <div className="place-list">{nearbyStores.map(s=><div className="place-row" key={s.id}><span className="place-icon"><MapPin size={19}/></span><span className="place-info"><b>{s.name}</b><small>{s.category} · {s.address}</small></span><span className="place-distance">{s.distance===null?"":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`} target="_blank" rel="noreferrer" aria-label="Ver no mapa"><ArrowRight size={16}/></a></div>)}{!catalogLoading&&nearbyStores.length===0&&<p className="empty-state">Ainda não há estabelecimentos verificados cadastrados. Vamos adicionar os primeiros parceiros.</p>}</div>
+          {searchPerformed&&<div className="price-results"><div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO</p><h2>{priceResults.length} preços verificados</h2></div></div>{priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.source_label}</small><small>Consultado em {new Date(r.observed_at).toLocaleString("pt-BR")}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}{priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}</div>}
+          <p className="demo-note">Os preços precisam de fonte e verificação. Ainda não há integração automática com sites de farmácias.</p>
         </section>}
         {tab === "ai" && <section className="screen ai-screen">
           <div className="ai-heading"><div className="ai-orb"><img src="/zorvi-mark.webp" alt="Símbolo ZORVI" /></div><p className="eyebrow">SUA COMPANHEIRA DE DESCOBERTAS</p><h1>Olá! Eu sou a<br/><span>ZORVI AI.</span></h1><p>Uma nova forma de encontrar, comparar e descobrir o mundo ao seu redor.</p></div>
