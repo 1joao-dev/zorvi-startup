@@ -15,10 +15,7 @@ const demoPlaces = [
   { name: "Café Botânico", type: "Restaurante", distance: "800 m", icon: Utensils },
   { name: "Shopping Riverside", type: "Lojas", distance: "1,2 km", icon: Wallet },
 ];
-const seedPosts = [
-  { id: 1, name: "Marina Costa", handle: "@marinacosta", time: "há 12 min", text: "Achei um cantinho incrível para tomar café e trabalhar. O ambiente é lindo e o cappuccino é perfeito ☕", place: "Café Botânico · Teresina", image: "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=900&auto=format&fit=crop", likes: 128, comments: 18 },
-  { id: 2, name: "Pedro Lima", handle: "@pedrolima", time: "há 38 min", text: "Dica para quem está economizando: compare os preços antes de sair. Pequenas diferenças fazem muita diferença no fim do mês.", place: "Centro · Teresina", image: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=900&auto=format&fit=crop", likes: 86, comments: 9 },
-];
+
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -114,11 +111,20 @@ function App() {
   const [dark, setDark] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todos");
-  const [liked, setLiked] = useState<number[]>([]);
   const [saved, setSaved] = useState<number[]>([]);
-  const [posts, setPosts] = useState(seedPosts);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
   const [composer, setComposer] = useState(false);
   const [postText, setPostText] = useState("");
+  const [postImage, setPostImage] = useState<File | null>(null);
+  const [postImagePreview, setPostImagePreview] = useState("");
+  const [postLocation, setPostLocation] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [commentsPost, setCommentsPost] = useState<FeedPost | null>(null);
+  const [comments, setComments] = useState<FeedComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentSending, setCommentSending] = useState(false);
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState([{ role: "assistant", text: "Oi! ✨ Sou a ZORVI AI. Posso ajudar você a descobrir lugares, comparar opções e encontrar experiências. O que vamos explorar hoje?" }]);
   const [toast, setToast] = useState("");
@@ -138,9 +144,9 @@ function App() {
       const userIds = [...new Set(raw.map((row) => row.user_id))];
       const postIds = raw.map((row) => row.id);
       const [profileResult, likeResult, commentResult] = await Promise.all([
-        userIds.length ? supabase.from("profiles").select("id,username,display_name,avatar_url,bio").in("id", userIds) : Promise.resolve({ data: [] as UserProfile[] }),
-        postIds.length ? supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds) : Promise.resolve({ data: [] as {post_id:string;user_id:string}[] }),
-        postIds.length ? supabase.from("post_comments").select("post_id").in("post_id", postIds) : Promise.resolve({ data: [] as {post_id:string}[] }),
+        userIds.length ? supabase.from("profiles").select("id,username,display_name,avatar_url,bio").in("id", userIds) : Promise.resolve({ data: [] as UserProfile[], error: null }),
+        postIds.length ? supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds) : Promise.resolve({ data: [] as {post_id:string;user_id:string}[], error: null }),
+        postIds.length ? supabase.from("post_comments").select("post_id").in("post_id", postIds) : Promise.resolve({ data: [] as {post_id:string}[], error: null }),
       ]);
       if (profileResult.error) throw profileResult.error;
       if (likeResult.error) throw likeResult.error;
