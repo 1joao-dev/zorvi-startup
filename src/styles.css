@@ -93,3 +93,12 @@
 .cancel-delete-button{border:1px solid var(--line);background:var(--surface2);color:var(--text)}
 .danger-delete-button{display:flex;align-items:center;gap:7px;border:0;background:#d92d55;color:white}
 .cancel-delete-button:disabled,.danger-delete-button:disabled{opacity:.55;cursor:not-allowed}
+
+/* ZORVI post editing */
+.post-menu button.edit-post-action{color:#c69aff}
+.post-menu button.delete-post-action{color:#ff718c}
+.edit-post-modal{max-height:88dvh;overflow-y:auto;padding-bottom:max(20px,env(safe-area-inset-bottom))}
+.edit-post-modal textarea{margin:4px 0 0;min-height:125px}
+.edit-post-modal .composer-footer{gap:10px;flex-wrap:wrap}
+.edit-post-modal .composer-footer small{color:var(--muted);font-size:9px}
+.edit-post-modal .primary-button{justify-content:center}
