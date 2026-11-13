@@ -154,3 +154,5 @@
 .map-selected-store>a{font-size:10px;color:#d0aaff}
 .map-selected-close{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#b9a9ca;padding:4px}
 @media(max-width:420px){.zorvi-leaflet-map{height:320px}.zorvi-map-legend{gap:6px;padding:6px 7px;font-size:7px}.zorvi-brand-marker{max-width:125px}.zorvi-brand-label b{font-size:9px}}
+
+.map-coordinate-note{margin:-7px 2px 14px;color:var(--muted);font-size:9px;line-height:1.5}
