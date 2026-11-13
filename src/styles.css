@@ -138,8 +138,10 @@
 .zorvi-map-marker-label b{font-size:10px;font-weight:850;overflow:hidden;text-overflow:ellipsis}
 .zorvi-map-marker-label small{margin-top:3px;color:#c5b6d6;font-size:8px;overflow:hidden;text-overflow:ellipsis}
 .zorvi-user-location-icon{background:transparent;border:0}
-.zorvi-user-location-dot{width:22px;height:22px;border:3px solid #fff;border-radius:50%;background:#3187ff;display:block;box-shadow:0 0 0 7px #3187ff35}
-.zorvi-user-location-dot i{display:none}
+.zorvi-user-location-dot{position:relative;width:22px;height:22px;border:3px solid #fff;border-radius:50%;background:#7200ff;display:grid;place-items:center;box-shadow:0 0 0 7px #7200ff35,0 0 18px #7200ff85}
+.zorvi-user-location-dot:after{content:"";position:absolute;inset:-8px;border:1px solid #b45cff;border-radius:50%;animation:zorvi-location-pulse 2s ease-out infinite}
+.zorvi-user-location-dot i{display:block;width:6px;height:6px;border-radius:50%;background:#fff}
+@keyframes zorvi-location-pulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.35);opacity:0}}
 .zorvi-map-popup{display:flex;flex-direction:column;gap:5px;min-width:165px}
 .zorvi-map-popup b{font-size:12px}
 .zorvi-map-popup small{font-size:10px;line-height:1.4;color:#c6b8d5}
