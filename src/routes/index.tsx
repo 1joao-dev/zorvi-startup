@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { AuthScreen } from "@/components/AuthScreen";
@@ -9,8 +9,39 @@ type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
-type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null };
-type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null} };
+type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null };
+type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
+type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
+type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; remove():void; invalidateSize():void };
+type LeafletLayerGroup = { clearLayers():void; addTo(map:LeafletMap):LeafletLayerGroup };
+type LeafletMarker = { addTo(layer:LeafletLayerGroup):LeafletMarker; bindPopup(html:string):LeafletMarker; on(event:string,handler:()=>void):LeafletMarker };
+type LeafletApi = { map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap; tileLayer(url:string,options?:Record<string,unknown>):{addTo(map:LeafletMap):void}; layerGroup():LeafletLayerGroup; divIcon(options:Record<string,unknown>):unknown; marker(coords:[number,number],options?:Record<string,unknown>):LeafletMarker };
+declare global { interface Window { L?:LeafletApi } }
+let leafletLoader:Promise<LeafletApi>|null=null;
+function ensureLeaflet():Promise<LeafletApi>{
+  if(typeof window==="undefined")return Promise.reject(new Error("Mapa indisponível neste ambiente."));
+  if(window.L)return Promise.resolve(window.L);
+  if(!leafletLoader){
+    leafletLoader=new Promise((resolve,reject)=>{
+      if(!document.querySelector('link[data-zorvi-leaflet]')){
+        const link=document.createElement("link");link.rel="stylesheet";link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";link.dataset.zorviLeaflet="true";document.head.appendChild(link);
+      }
+      const loaded=()=>window.L?resolve(window.L):reject(new Error("Não foi possível inicializar o mapa."));
+      const existing=document.querySelector<HTMLScriptElement>('script[data-zorvi-leaflet]');
+      if(existing){existing.addEventListener("load",loaded,{once:true});existing.addEventListener("error",()=>reject(new Error("Falha ao carregar o mapa.")),{once:true});return;}
+      const script=document.createElement("script");script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.async=true;script.dataset.zorviLeaflet="true";script.onload=loaded;script.onerror=()=>reject(new Error("Falha ao carregar o mapa."));document.head.appendChild(script);
+    });
+  }
+  return leafletLoader;
+}
+function escapeMapHtml(value:string){return value.replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]||char));}
+function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug">){
+  const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
+  const slug=store.brand_slug||(name.toLowerCase().includes("drogasil")?"drogasil":name.toLowerCase().includes("globo")?"globo":name.toLowerCase().includes("pague menos")?"pague-menos":"");
+  const initials=slug==="pague-menos"?"PM":name.trim().charAt(0).toUpperCase()||"L";
+  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":"#7200FF";
+  return {name,slug,initials,color};
+}
 
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const radians = (value: number) => value * Math.PI / 180;
@@ -123,6 +154,13 @@ function App() {
   const [priceResults, setPriceResults] = useState<PriceResult[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [searchProductCategory, setSearchProductCategory] = useState<string|null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState("");
+  const [selectedMapStore, setSelectedMapStore] = useState<MapStore|null>(null);
+  const mapContainerRef = useRef<HTMLDivElement|null>(null);
+  const leafletMapRef = useRef<LeafletMap|null>(null);
+  const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
   const [saved, setSaved] = useState<number[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
