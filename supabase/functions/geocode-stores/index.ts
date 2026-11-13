@@ -86,9 +86,11 @@ Deno.serve(async (request: Request) => {
   const allowedCategories = ["Farmácia", "Mercado", "Restaurante", "Lojas", "Outros"];
   const category = allowedCategories.includes(requestBody.category) ? requestBody.category : null;
 
+  const retryBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   let storeQuery = admin.from("stores").select("id,name,address,city,state")
     .eq("city", "Teresina").eq("state", "PI")
-    .is("latitude", null).is("longitude", null).is("geocode_attempted_at", null);
+    .is("latitude", null).is("longitude", null)
+    .or(`geocode_attempted_at.is.null,geocode_attempted_at.lt.${retryBefore}`);
   if (category) storeQuery = storeQuery.eq("category", category);
   const { data: stores, error } = await storeQuery.limit(5);
 
@@ -138,14 +140,15 @@ Deno.serve(async (request: Request) => {
       if (updateError) throw updateError;
       updated += 1;
     } catch {
-      // Keep temporary network/geocoder failures eligible for a later retry.
+      await admin.from("stores").update({ geocode_attempted_at: new Date().toISOString() }).eq("id", store.id).is("latitude", null).is("longitude", null);
       failed.push(store.name);
     }
   }
 
   let remainingQuery = admin.from("stores").select("id", { count: "exact", head: true })
     .eq("city", "Teresina").eq("state", "PI")
-    .is("latitude", null).is("longitude", null).is("geocode_attempted_at", null);
+    .is("latitude", null).is("longitude", null)
+    .or(`geocode_attempted_at.is.null,geocode_attempted_at.lt.${retryBefore}`);
   let unresolvedQuery = admin.from("stores").select("id", { count: "exact", head: true })
     .eq("city", "Teresina").eq("state", "PI")
     .is("latitude", null).is("longitude", null);
