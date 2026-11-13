@@ -156,3 +156,5 @@
 @media(max-width:420px){.zorvi-leaflet-map{height:320px}.zorvi-map-legend{gap:6px;padding:6px 7px;font-size:7px}.zorvi-brand-marker{max-width:125px}.zorvi-brand-label b{font-size:9px}}
 
 .map-coordinate-note{margin:-7px 2px 14px;color:var(--muted);font-size:9px;line-height:1.5}
+
+.map-coordinate-note{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-7px 2px 14px;color:var(--muted);font-size:9px;line-height:1.5}.map-coordinate-note button{flex:0 0 auto;border:1px solid #8f51d877;border-radius:9px;background:#251438;color:#d7baff;padding:8px 10px;font-size:9px;font-weight:750}.map-coordinate-note button:disabled{opacity:.6;cursor:wait}
