@@ -30,8 +30,8 @@ function ensureLeaflet():Promise<LeafletApi>{
       const loaded=()=>window.L?resolve(window.L):reject(new Error("Não foi possível inicializar o mapa."));
       const existing=document.querySelector<HTMLScriptElement>('script[data-zorvi-leaflet]');
       if(existing){existing.addEventListener("load",loaded,{once:true});existing.addEventListener("error",()=>reject(new Error("Falha ao carregar o mapa.")),{once:true});return;}
-      const script=document.createElement("script");script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.async=true;script.dataset.zorviLeaflet="true";script.onload=loaded;script.onerror=()=>reject(new Error("Falha ao carregar o mapa."));document.head.appendChild(script);
-    });
+      const script=document.createElement("script");script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.async=true;script.dataset.zorviLeaflet="true";script.onload=loaded;script.onerror=()=>{script.remove();reject(new Error("Falha ao carregar o mapa."));};document.head.appendChild(script);
+    }).catch(error=>{document.querySelector('script[data-zorvi-leaflet]')?.remove();leafletLoader=null;throw error;});
   }
   return leafletLoader;
 }
