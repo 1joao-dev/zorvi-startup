@@ -7,6 +7,8 @@ import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
+type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
+type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
 const demoPlaces = [
   { name: "Mercado Pão de Açúcar", type: "Mercado", distance: "450 m", icon: ShoppingBag },
   { name: "Farmácia do Povo", type: "Farmácia", distance: "650 m", icon: Plus },
@@ -126,10 +128,83 @@ function App() {
     setChat((old) => [...old, { role: "user", text: value }, { role: "assistant", text: "Boa pergunta! Esta é uma prévia da ZORVI AI. Quando conectarmos os dados reais e a inteligência artificial, vou poder comparar opções perto de você. Por enquanto, explore os locais demonstrativos no mapa." }]);
     setMessage("");
   };
-  const publish = () => {
-    if (!postText.trim()) return;
-    setPosts((old) => [{ id: Date.now(), name: "Você", handle: "@voce", time: "agora", text: postText, place: "Sua localização", image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop", likes: 0, comments: 0 }, ...old]);
-    setPostText(""); setComposer(false); setTab("home"); notify("Publicação adicionada ao seu feed!");
+  const loadFeed = async () => {
+    if (!supabase || !session?.user.id) return;
+    setFeedLoading(true);
+    try {
+      const { data: rows, error } = await supabase.from("posts").select("id,user_id,content,image_url,location_name,created_at").order("created_at", { ascending: false }).limit(50);
+      if (error) throw error;
+      const raw = rows || [];
+      const userIds = [...new Set(raw.map((row) => row.user_id))];
+      const postIds = raw.map((row) => row.id);
+      const [profileResult, likeResult, commentResult] = await Promise.all([
+        userIds.length ? supabase.from("profiles").select("id,username,display_name,avatar_url,bio").in("id", userIds) : Promise.resolve({ data: [] as UserProfile[] }),
+        postIds.length ? supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds) : Promise.resolve({ data: [] as {post_id:string;user_id:string}[] }),
+        postIds.length ? supabase.from("post_comments").select("post_id").in("post_id", postIds) : Promise.resolve({ data: [] as {post_id:string}[] }),
+      ]);
+      if (profileResult.error) throw profileResult.error;
+      if (likeResult.error) throw likeResult.error;
+      if (commentResult.error) throw commentResult.error;
+      const profileMap = new Map((profileResult.data || []).map((item) => [item.id, item as UserProfile]));
+      const likeRows = likeResult.data || [];
+      const commentRows = commentResult.data || [];
+      setPosts(raw.map((row) => ({ ...row, author: profileMap.get(row.user_id) || null, likes_count: likeRows.filter((x) => x.post_id === row.id).length, comments_count: commentRows.filter((x) => x.post_id === row.id).length, liked: likeRows.some((x) => x.post_id === row.id && x.user_id === session.user.id) })));
+    } catch (cause) {
+      notify(cause && typeof cause === "object" && "message" in cause ? String((cause as {message?:unknown}).message || "") : "Não foi possível carregar o feed.");
+    } finally { setFeedLoading(false); }
+  };
+  useEffect(() => { if (session?.user.id) void loadFeed(); }, [session?.user.id]);
+  const choosePostImage = (file?: File) => {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { notify("Use uma imagem JPG, PNG ou WebP."); return; }
+    if (file.size > 8 * 1024 * 1024) { notify("A imagem deve ter no máximo 8 MB."); return; }
+    setPostImage(file); setPostImagePreview(URL.createObjectURL(file));
+  };
+  const publish = async () => {
+    if (!supabase || !session?.user.id || (!postText.trim() && !postImage)) return;
+    setPublishing(true);
+    try {
+      let imageUrl: string | null = null;
+      if (postImage) {
+        const ext = postImage.type === "image/png" ? "png" : postImage.type === "image/webp" ? "webp" : "jpg";
+        const path = session.user.id + "/" + Date.now() + "." + ext;
+        const { error } = await supabase.storage.from("post-images").upload(path, postImage, { contentType: postImage.type, cacheControl: "3600" });
+        if (error) throw error;
+        imageUrl = supabase.storage.from("post-images").getPublicUrl(path).data.publicUrl;
+      }
+      const { error } = await supabase.from("posts").insert({ user_id: session.user.id, content: postText.trim(), image_url: imageUrl, location_name: postLocation.trim() || null });
+      if (error) throw error;
+      setPostText(""); setPostImage(null); setPostImagePreview(""); setPostLocation(""); setComposer(false);
+      await loadFeed(); setTab("home"); notify("Publicação compartilhada com a comunidade!");
+    } catch (cause) {
+      notify(cause && typeof cause === "object" && "message" in cause ? String((cause as {message?:unknown}).message || "") : "Não foi possível publicar.");
+    } finally { setPublishing(false); }
+  };
+  const toggleLike = async (post: FeedPost) => {
+    if (!supabase || !session?.user.id) return;
+    setPosts((old) => old.map((item) => item.id === post.id ? { ...item, liked: !post.liked, likes_count: item.likes_count + (post.liked ? -1 : 1) } : item));
+    const result = post.liked ? await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", session.user.id) : await supabase.from("post_likes").insert({ post_id: post.id, user_id: session.user.id });
+    if (result.error) { notify(result.error.message); await loadFeed(); }
+  };
+  const openComments = async (post: FeedPost) => {
+    if (!supabase) return;
+    setCommentsPost(post); setComments([]); setCommentsLoading(true);
+    const { data, error } = await supabase.from("post_comments").select("id,content,created_at,user_id").eq("post_id", post.id).order("created_at", { ascending: true });
+    if (error) { notify(error.message); setCommentsLoading(false); return; }
+    const ids = [...new Set((data || []).map((item) => item.user_id))];
+    const { data: authors, error: authorError } = ids.length ? await supabase.from("profiles").select("id,username,display_name,avatar_url,bio").in("id", ids) : { data: [] as UserProfile[], error: null };
+    if (authorError) notify(authorError.message);
+    const map = new Map((authors || []).map((item) => [item.id, item as UserProfile]));
+    setComments((data || []).map((item) => ({ ...item, author: map.get(item.user_id) || null })));
+    setCommentsLoading(false);
+  };
+  const sendComment = async () => {
+    if (!supabase || !session?.user.id || !commentsPost || !commentText.trim()) return;
+    setCommentSending(true);
+    const { error } = await supabase.from("post_comments").insert({ post_id: commentsPost.id, user_id: session.user.id, content: commentText.trim() });
+    if (error) notify(error.message);
+    else { setCommentText(""); await openComments(commentsPost); await loadFeed(); }
+    setCommentSending(false);
   };
   const filtered = demoPlaces.filter((p) => (filter === "Todos" || p.type === filter) && (p.name.toLowerCase().includes(query.toLowerCase()) || p.type.toLowerCase().includes(query.toLowerCase())));
 
@@ -150,7 +225,9 @@ function App() {
           <div className="discovery-cards"><button className="discovery-card discovery-purple" onClick={() => setTab("map")}><span className="discovery-icon"><MapPin size={19}/></span><b>Mapa inteligente</b><small>Lugares ao seu redor</small><ArrowRight className="discovery-arrow" size={17}/></button><button className="discovery-card discovery-pink" onClick={() => setTab("ai")}><span className="discovery-icon"><Sparkles size={19}/></span><b>ZORVI AI</b><small>Descubra com inteligência</small><ArrowRight className="discovery-arrow" size={17}/></button></div>
           <div className="section-heading feed-heading"><div><p className="eyebrow">COMUNIDADE ZORVI</p><h2>O que está acontecendo</h2></div><button className="round-add" onClick={() => setComposer(true)}><Plus size={19}/></button></div>
           <div className="stories">{["Seu momento","Marina","Pedro","Camila","Lucas"].map((n,i) => <button className="story" key={n} onClick={() => i === 0 ? setComposer(true) : notify("Stories em breve")}><span className={"story-ring story-" + i}>{i === 0 ? <Plus size={20}/> : n[0]}</span><small>{n}</small></button>)}</div>
-          {posts.map((p) => <article className="post-card" key={p.id}><div className="post-header"><div className="avatar">{p.name[0]}</div><div className="post-author"><b>{p.name}</b><small>{p.handle} · {p.time}</small></div><button className="icon-button" onClick={() => notify("Mais opções em breve")}>•••</button></div><p className="post-copy">{p.text}</p><div className="post-image-wrap"><img src={p.image} alt="Imagem da publicação"/><span className="post-tag">DESCOBERTA</span></div><div className="post-place"><MapPin size={14}/> {p.place}</div><div className="post-actions"><button className={liked.includes(p.id) ? "action-active" : ""} onClick={() => setLiked((v) => v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v,p.id])}><Heart size={19} fill={liked.includes(p.id) ? "currentColor" : "none"}/> {p.likes + (liked.includes(p.id) ? 1 : 0)}</button><button onClick={() => notify("Comentários em breve")}><MessageCircle size={19}/> {p.comments}</button><button onClick={() => notify("Link copiado (demonstração)")}><Share2 size={18}/></button><button className="save-action" onClick={() => setSaved((v) => v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v,p.id])}><Bookmark size={19} fill={saved.includes(p.id) ? "currentColor" : "none"}/></button></div></article>)}
+          {feedLoading && <p className="feed-status">Carregando publicações...</p>}
+          {!feedLoading && posts.length === 0 && <div className="feed-empty"><Sparkles size={25}/><b>O feed está esperando por você.</b><span>Compartilhe a primeira descoberta da comunidade ZORVI.</span><button className="primary-button" onClick={() => setComposer(true)}>Criar publicação <Plus size={15}/></button></div>}
+          {posts.map((p) => <article className="post-card" key={p.id}><div className="post-header"><div className="avatar">{p.author?.avatar_url ? <img src={p.author.avatar_url} alt=""/> : (p.author?.display_name || "Z")[0]}</div><div className="post-author"><b>{p.author?.display_name || "Explorador ZORVI"}</b><small>@{p.author?.username || "explorador"} · {new Date(p.created_at).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</small></div></div>{p.content && <p className="post-copy">{p.content}</p>}{p.image_url && <div className="post-image-wrap"><img src={p.image_url} alt="Imagem da publicação"/><span className="post-tag">DESCOBERTA</span></div>}{p.location_name && <div className="post-place"><MapPin size={14}/> {p.location_name}</div>}<div className="post-actions"><button className={p.liked ? "action-active" : ""} onClick={() => void toggleLike(p)}><Heart size={19} fill={p.liked ? "currentColor" : "none"}/> {p.likes_count}</button><button onClick={() => void openComments(p)}><MessageCircle size={19}/> {p.comments_count}</button><button onClick={() => { void navigator.clipboard?.writeText(window.location.href + "?post=" + p.id); notify("Link da publicação copiado."); }}><Share2 size={18}/></button></div></article>)}
           <p className="demo-note">Conteúdo demonstrativo · ofertas e locais reais serão conectados futuramente.</p>
         </section>}
         {tab === "map" && <section className="screen">
@@ -183,7 +260,8 @@ function App() {
       <label className="profile-form-label">Bio<textarea value={editBio} maxLength={160} onChange={(e) => setEditBio(e.target.value)} placeholder="Conte um pouco sobre você..." rows={3}/><small>{editBio.length}/160</small></label>
       <button className="primary-button profile-save-button" disabled={profileSaving} onClick={saveProfile}>{profileSaving ? "Salvando..." : "Salvar alterações"} <Check size={16}/></button>
     </div></div>}
-    {composer && <div className="modal-backdrop" onClick={() => setComposer(false)}><div className="composer-modal" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Nova publicação</h2><button className="icon-button" onClick={() => setComposer(false)}><X size={19}/></button></div><textarea value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Compartilhe uma descoberta com a comunidade..."/><div className="composer-footer"><span><MapPin size={14}/> Adicionar localização</span><button className="primary-button" disabled={!postText.trim()} onClick={publish}>Publicar <ArrowRight size={16}/></button></div></div></div>}
+    {composer && <div className="modal-backdrop" onClick={() => !publishing && setComposer(false)}><div className="composer-modal feed-composer" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Nova publicação</h2><button className="icon-button" onClick={() => setComposer(false)} disabled={publishing}><X size={19}/></button></div><textarea value={postText} maxLength={2200} onChange={(e) => setPostText(e.target.value)} placeholder="Compartilhe uma descoberta com a comunidade..."/><label className="post-image-picker"><Camera size={17}/> {postImage ? "Trocar imagem" : "Adicionar foto"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => choosePostImage(e.target.files?.[0])}/></label>{postImagePreview && <div className="post-preview"><img src={postImagePreview} alt="Prévia"/><button onClick={() => {setPostImage(null);setPostImagePreview("");}}>Remover foto</button></div>}<label className="profile-form-label">Local ou estabelecimento (opcional)<input value={postLocation} maxLength={120} onChange={(e) => setPostLocation(e.target.value)} placeholder="Ex.: Café no centro de Teresina"/></label><div className="composer-footer"><small>{postText.length}/2200 · Foto até 8 MB</small><button className="primary-button" disabled={publishing || (!postText.trim() && !postImage)} onClick={() => void publish()}>{publishing ? "Publicando..." : "Publicar"} <ArrowRight size={16}/></button></div></div></div>}
+    {commentsPost && <div className="modal-backdrop" onClick={() => setCommentsPost(null)}><div className="composer-modal comments-modal" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Comentários</h2><button className="icon-button" onClick={() => setCommentsPost(null)}><X size={19}/></button></div><div className="comments-list">{commentsLoading ? <p>Carregando comentários...</p> : comments.length ? comments.map((comment) => <div className="comment-item" key={comment.id}><b>{comment.author?.display_name || "Explorador ZORVI"}</b><p>{comment.content}</p><small>{new Date(comment.created_at).toLocaleString("pt-BR")}</small></div>) : <p className="comments-empty">Seja a primeira pessoa a comentar.</p>}</div><form className="comment-form" onSubmit={(e) => {e.preventDefault();void sendComment();}}><input value={commentText} onChange={(e) => setCommentText(e.target.value)} maxLength={1000} placeholder="Escreva um comentário..."/><button className="primary-button" disabled={commentSending || !commentText.trim()}><Send size={16}/></button></form></div></div>}
     {showSplash && <div className="zorvi-splash" aria-label="ZORVI"><img src="/zorvi-mark.webp" alt="" /><div className="splash-word">ZORVI</div><p>Tudo se conecta. Tudo se descobre.</p><span className="splash-loader" /></div>}
     {toast && <div className="toast"><Check size={16}/>{toast}</div>}
   </div>;
