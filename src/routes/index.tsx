@@ -9,7 +9,7 @@ type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
-type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number; longitude:number; website_url:string|null };
+type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null} };
 
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -386,7 +386,7 @@ function App() {
       .filter((store) => filter === "Todos" || store.category === filter)
       .map((store) => ({
         ...store,
-        distance: userLocation
+        distance: userLocation && store.latitude !== null && store.longitude !== null
           ? distanceKm(userLocation.lat, userLocation.lon, store.latitude, store.longitude)
           : null,
       }))
@@ -433,7 +433,7 @@ function App() {
         (row): row is PriceResult =>
           Boolean(row.store && row.product)
           && (filter === "Todos" || row.store.category === filter)
-          && (!userLocation || distanceKm(
+          && (!userLocation || row.store!.latitude === null || row.store!.longitude === null || distanceKm(
             userLocation.lat,
             userLocation.lon,
             row.store!.latitude,
@@ -484,7 +484,7 @@ function App() {
           <div className="filter-row">{["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}</div>
           {userLocation?<div className="map-visual real-map"><iframe title="Mapa OpenStreetMap" src={`https://www.openstreetmap.org/export/embed.html?bbox=${userLocation.lon-0.025}%2C${userLocation.lat-0.018}%2C${userLocation.lon+0.025}%2C${userLocation.lat+0.018}&layer=mapnik&marker=${userLocation.lat}%2C${userLocation.lon}`} loading="lazy"/><a className="map-external-link" href={`https://www.openstreetmap.org/?mlat=${userLocation.lat}&mlon=${userLocation.lon}#map=15/${userLocation.lat}/${userLocation.lon}`} target="_blank" rel="noreferrer">Abrir mapa completo</a></div>:<div className="map-location-placeholder"><MapPin size={25}/><b>Ative sua localização</b><span>O mapa será centralizado onde você está.</span></div>}
           <div className="nearby-head"><div><p className="eyebrow">ESTABELECIMENTOS CADASTRADOS</p><h2>{nearbyStores.length} locais encontrados</h2></div><button className="text-link" onClick={()=>void loadNearbyStores()}>Atualizar</button></div>
-          <div className="place-list">{nearbyStores.map(s=><div className="place-row" key={s.id}><span className="place-icon"><MapPin size={19}/></span><span className="place-info"><b>{s.name}</b><small>{s.category} · {s.address}</small></span><span className="place-distance">{s.distance===null?"":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`} target="_blank" rel="noreferrer" aria-label="Ver no mapa"><ArrowRight size={16}/></a></div>)}{storeError ? <p className="empty-state">{storeError}</p> : !catalogLoading && nearbyStores.length === 0 && <p className="empty-state">Ainda não há estabelecimentos verificados cadastrados. Vamos adicionar os primeiros parceiros.</p> }</div>
+          <div className="place-list">{nearbyStores.map(s=><div className="place-row" key={s.id}><span className="place-icon"><MapPin size={19}/></span><span className="place-info"><b>{s.name}</b><small>{s.category} · {s.address}</small></span><span className="place-distance">{s.distance===null?"":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={s.latitude !== null && s.longitude !== null ? `https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}` : `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${s.address}, ${s.city}, ${s.state}, Brasil`)}`} target="_blank" rel="noreferrer" aria-label="Ver endereço no mapa"><ArrowRight size={16}/></a></div>)}{storeError ? <p className="empty-state">{storeError}</p> : !catalogLoading && nearbyStores.length === 0 && <p className="empty-state">Ainda não há estabelecimentos verificados cadastrados. Vamos adicionar os primeiros parceiros.</p> }</div>
           {searchPerformed&&<div className="price-results"><div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO</p><h2>{priceResults.length} preços verificados</h2></div></div>{priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.source_label}</small><small>Consultado em {new Date(r.observed_at).toLocaleString("pt-BR")}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}{priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}</div>}
           <p className="demo-note">Os preços precisam de fonte e verificação. Ainda não há integração automática com sites de farmácias.</p>
         </section>}
