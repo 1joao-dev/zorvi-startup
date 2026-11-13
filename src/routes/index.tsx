@@ -40,8 +40,8 @@ function escapeMapHtml(value:string){return value.replace(/[&<>"']/g,char=>({"&"
 function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category">){
   const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
   const slug=store.brand_slug||(name.toLowerCase().includes("drogasil")?"drogasil":name.toLowerCase().includes("globo")?"globo":name.toLowerCase().includes("pague menos")?"pague-menos":"");
-  const initials=slug==="pague-menos"?"PM":slug==="globo"?"G":slug==="drogasil"?"D":name.trim().charAt(0).toUpperCase()||"L";
-  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":store.category==="Mercado"?"#159A63":store.category==="Restaurante"?"#D97706":"#7200FF";
+  const initials=slug==="pague-menos"?"PM":slug==="globo"?"G":slug==="drogasil"?"D":slug==="pao-de-acucar"?"P":slug==="atacadao"?"A":slug==="carvalho"?"C":slug==="ferreira"?"F":slug==="mix-atacarejo"?"MIX":name.trim().charAt(0).toUpperCase()||"L";
+  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":slug==="pao-de-acucar"?"#F0B323":slug==="atacadao"?"#E53935":slug==="carvalho"?"#16834A":slug==="ferreira"?"#2873B8":slug==="mix-atacarejo"?"#E58A18":store.category==="Mercado"?"#159A63":store.category==="Restaurante"?"#D97706":"#7200FF";
   return {name,slug,initials,color};
 }
 
