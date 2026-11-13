@@ -398,7 +398,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,category,address,city,state,latitude,longitude,website_url")
+        .select("id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url")
         .eq("verification_status", "verified")
         .limit(500);
       if (error) throw error;
@@ -433,6 +433,26 @@ function App() {
     [stores, filter, userLocation]
   );
 
+  const mapStores = useMemo<MapStore[]>(() => {
+    const relevantStores = nearbyStores.filter(store => !searchPerformed || !searchProductCategory || store.category === searchProductCategory);
+    if (!searchPerformed) return relevantStores;
+    const bestByStore = new Map<string,PriceResult>();
+    priceResults.forEach(result => {
+      const current = bestByStore.get(result.store.id);
+      if (!current || Number(result.price) < Number(current.price)) bestByStore.set(result.store.id,result);
+    });
+    return relevantStores.map(store => {
+      const result = bestByStore.get(store.id);
+      return {
+        ...store,
+        mapPrice: result ? Number(result.price) : null,
+        mapPriceObservedAt: result?.observed_at || null,
+        mapPriceSource: result?.source_label || null,
+        mapProductLabel: result ? [result.product.name,result.product.variant].filter(Boolean).join(" · ") : null,
+      };
+    });
+  },[nearbyStores,searchPerformed,searchProductCategory,priceResults]);
+
   const searchPrices = async () => {
     if (!supabase || !query.trim()) return;
     setCatalogLoading(true);
@@ -440,20 +460,23 @@ function App() {
     try {
       const { data: products, error } = await supabase
         .from("products")
-        .select("id,name,brand,variant,unit")
+        .select("id,name,brand,variant,unit,category")
         .ilike("normalized_name", "%" + query.trim() + "%")
         .limit(20);
       if (error) throw error;
 
       const productIds = (products || []).map((product) => product.id);
+      setSearchProductCategory(products?.[0]?.category || null);
+      if (products?.[0]?.category) setFilter(products[0].category);
       if (!productIds.length) {
         setPriceResults([]);
+        setSearchProductCategory(null);
         return;
       }
 
       const { data, error: priceError } = await supabase
         .from("price_observations")
-        .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url),products(id,name,brand,variant,unit)")
+        .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url),products(id,name,brand,variant,unit,category)")
         .in("product_id", productIds)
         .eq("verification_status", "verified")
         .order("price", { ascending: true })
