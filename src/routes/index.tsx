@@ -34,6 +34,7 @@ function ensureLeaflet():Promise<LeafletApi>{
   }
   return leafletLoader;
 }
+function formatMapPrice(value:number){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(value);}
 function escapeMapHtml(value:string){return value.replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]||char));}
 function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug">){
   const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
@@ -493,7 +494,7 @@ function App() {
       const verifiedRows = joinedRows.filter(
         (row): row is PriceResult =>
           Boolean(row.store && row.product)
-          && (filter === "Todos" || row.store.category === filter)
+          && (!products?.[0]?.category || row.store.category === products[0].category)
           && (!userLocation || row.store!.latitude === null || row.store!.longitude === null || distanceKm(
             userLocation.lat,
             userLocation.lon,
@@ -514,6 +515,95 @@ function App() {
       setCatalogLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (tab !== "map") return;
+    let active = true;
+    setMapLoadError("");
+    void ensureLeaflet().then((leaflet) => {
+      if (!active || !mapContainerRef.current) return;
+      if (!leafletMapRef.current) {
+        const map = leaflet.map(mapContainerRef.current, { zoomControl: false, scrollWheelZoom: false });
+        map.setView([-5.0892, -42.8016], 13);
+        leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+        leafletMapRef.current = map;
+        leafletMarkerLayerRef.current = leaflet.layerGroup().addTo(map);
+      }
+      setMapReady(true);
+      window.setTimeout(() => leafletMapRef.current?.invalidateSize(), 120);
+    }).catch((error:unknown) => {
+      if (active) setMapLoadError(error instanceof Error ? error.message : "Não foi possível carregar o mapa.");
+    });
+    return () => {
+      active = false;
+      leafletMapRef.current?.remove();
+      leafletMapRef.current = null;
+      leafletMarkerLayerRef.current = null;
+      setMapReady(false);
+      setSelectedMapStore(null);
+    };
+  }, [tab]);
+
+  useEffect(() => {
+    if (mapReady && userLocation && leafletMapRef.current) {
+      leafletMapRef.current.setView([userLocation.lat, userLocation.lon], 15);
+    }
+  }, [mapReady, userLocation]);
+
+  useEffect(() => {
+    const leaflet = window.L;
+    const markerLayer = leafletMarkerLayerRef.current;
+    if (!mapReady || !leaflet || !markerLayer) return;
+    markerLayer.clearLayers();
+
+    mapStores.forEach((store) => {
+      if (store.latitude === null || store.longitude === null) return;
+      const brand = getStoreBrand(store);
+      const hasPrice = typeof store.mapPrice === "number";
+      const markerTitle = hasPrice
+        ? formatMapPrice(store.mapPrice as number)
+        : searchPerformed ? "Sem preço" : brand.name;
+      const logoUrl = store.brand_logo_url && /^https?:\\/\\//i.test(store.brand_logo_url)
+        ? escapeMapHtml(store.brand_logo_url)
+        : "";
+      const markerHtml = `<div class="zorvi-brand-marker" style="--brand-accent:${brand.color}">
+        <span class="zorvi-brand-avatar">${logoUrl ? `<img src="${logoUrl}" alt="" />` : `<span>${escapeMapHtml(brand.initials)}</span>`}</span>
+        <span class="zorvi-brand-label"><b>${escapeMapHtml(markerTitle)}</b><small>${escapeMapHtml(brand.name)}</small></span>
+      </div>`;
+      const icon = leaflet.divIcon({
+        className: "zorvi-leaflet-icon",
+        html: markerHtml,
+        iconSize: [142, 48],
+        iconAnchor: [71, 24],
+        popupAnchor: [0, -25],
+      });
+      const marker = leaflet.marker([store.latitude, store.longitude], { icon }).addTo(markerLayer);
+      const priceMarkup = hasPrice
+        ? `<strong class="zorvi-popup-price">${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
+        : searchPerformed ? '<strong class="zorvi-popup-no-price">Preço não confirmado</strong>' : "";
+      const updatedMarkup = store.mapPriceObservedAt
+        ? `<small>Atualizado em ${escapeMapHtml(new Date(store.mapPriceObservedAt).toLocaleString("pt-BR"))}</small>`
+        : "";
+      const popupHtml = `<div class="zorvi-map-popup"><b>${escapeMapHtml(store.name)}</b><small>${escapeMapHtml(store.address)}, ${escapeMapHtml(store.city)}</small>${priceMarkup}${updatedMarkup}${store.website_url ? `<a href="${escapeMapHtml(store.website_url)}" target="_blank" rel="noreferrer">Site da loja</a>` : ""}</div>`;
+      marker.bindPopup(popupHtml);
+      marker.on("click", () => setSelectedMapStore(store));
+    });
+
+    if (userLocation) {
+      const youIcon = leaflet.divIcon({
+        className: "zorvi-user-location-icon",
+        html: '<span class="zorvi-user-location-dot"><i></i></span>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+      leaflet.marker([userLocation.lat, userLocation.lon], { icon: youIcon })
+        .addTo(markerLayer)
+        .bindPopup("<b>Você está aqui</b>");
+    }
+  }, [mapReady, mapStores, userLocation, searchPerformed, query]);
 
   if (isSupabaseConfigured && authLoading) return <div className="zorvi-auth-loading"><img src="/zorvi-mark.webp" alt="ZORVI"/><span>Preparando sua experiência...</span></div>;
   if (isSupabaseConfigured && !session) return <AuthScreen />;
