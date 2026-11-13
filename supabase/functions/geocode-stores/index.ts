@@ -82,16 +82,15 @@ Deno.serve(async (request: Request) => {
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const requestBody = await request.json().catch(() => ({}));
+  const allowedCategories = ["Farmácia", "Mercado", "Restaurante", "Lojas", "Outros"];
+  const category = allowedCategories.includes(requestBody.category) ? requestBody.category : null;
 
-  const { data: stores, error } = await admin
-    .from("stores")
-    .select("id,name,address,city,state")
-    .eq("city", "Teresina")
-    .eq("state", "PI")
-    .is("latitude", null)
-    .is("longitude", null)
-    .is("geocode_attempted_at", null)
-    .limit(5);
+  let storeQuery = admin.from("stores").select("id,name,address,city,state")
+    .eq("city", "Teresina").eq("state", "PI")
+    .is("latitude", null).is("longitude", null).is("geocode_attempted_at", null);
+  if (category) storeQuery = storeQuery.eq("category", category);
+  const { data: stores, error } = await storeQuery.limit(5);
 
   if (error) {
     return new Response(JSON.stringify({ error: "Não foi possível consultar os estabelecimentos." }), {
@@ -144,21 +143,17 @@ Deno.serve(async (request: Request) => {
     }
   }
 
-  const { count: remaining } = await admin
-    .from("stores")
-    .select("id", { count: "exact", head: true })
-    .eq("city", "Teresina")
-    .eq("state", "PI")
-    .is("latitude", null)
-    .is("longitude", null)
-    .is("geocode_attempted_at", null);
-  const { count: unresolved } = await admin
-    .from("stores")
-    .select("id", { count: "exact", head: true })
-    .eq("city", "Teresina")
-    .eq("state", "PI")
-    .is("latitude", null)
-    .is("longitude", null);
+  let remainingQuery = admin.from("stores").select("id", { count: "exact", head: true })
+    .eq("city", "Teresina").eq("state", "PI")
+    .is("latitude", null).is("longitude", null).is("geocode_attempted_at", null);
+  let unresolvedQuery = admin.from("stores").select("id", { count: "exact", head: true })
+    .eq("city", "Teresina").eq("state", "PI")
+    .is("latitude", null).is("longitude", null);
+  if (category) {
+    remainingQuery = remainingQuery.eq("category", category);
+    unresolvedQuery = unresolvedQuery.eq("category", category);
+  }
+  const [{ count: remaining }, { count: unresolved }] = await Promise.all([remainingQuery, unresolvedQuery]);
 
   return new Response(JSON.stringify({
     processed: stores?.length || 0,
