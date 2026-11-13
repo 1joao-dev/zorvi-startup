@@ -11,3 +11,20 @@
 @media(min-width:700px){.app-shell{border-left:1px solid var(--line);border-right:1px solid var(--line)}.bottom-nav{border-left:1px solid var(--line);border-right:1px solid var(--line)}}
 @media(max-width:370px){.main-content{padding-left:15px;padding-right:15px}.welcome-row h1{font-size:30px}.location-pill{font-size:9px;padding:7px}.discovery-card{padding:12px}.post-image-wrap{height:180px}.nav-item{min-width:48px}.nav-item small{font-size:8px}}
 @media(prefers-reduced-motion:reduce){.zorvi-app *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+
+/* ZORVI official brand assets */
+.brand{gap:7px}
+.brand-mark-image{width:32px;height:32px;object-fit:cover;border-radius:10px;display:block;box-shadow:0 4px 16px #7200ff45}
+.brand>span:last-child{font:700 22px "Space Grotesk",sans-serif;letter-spacing:1.5px}
+.ai-orb{overflow:hidden;padding:0;background:transparent;box-shadow:0 0 34px #8c24ff55}
+.ai-orb img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.zorvi-splash{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 43%,#25103f 0%,#10091d 37%,#080610 76%);color:#fff;animation:splashOut .45s ease 1.05s forwards}
+.zorvi-splash img{width:116px;height:116px;object-fit:cover;border-radius:29px;box-shadow:0 0 55px #8d28ff80;animation:splashMark .8s cubic-bezier(.2,.8,.2,1) both}
+.splash-word{font:700 34px "Space Grotesk",sans-serif;letter-spacing:4px;margin-top:18px}
+.zorvi-splash p{font-size:11px;letter-spacing:.7px;color:#c9a7ff;margin:7px 0 25px}
+.splash-loader{width:62px;height:3px;border-radius:4px;background:#ffffff20;overflow:hidden;position:relative}
+.splash-loader:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#9b35ff,#e05cff);transform-origin:left;animation:loadSplash 1s ease both}
+@keyframes splashMark{from{opacity:0;transform:translateY(12px) scale(.88)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes loadSplash{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes splashOut{to{opacity:0;visibility:hidden;pointer-events:none}}
