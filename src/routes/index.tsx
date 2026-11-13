@@ -88,7 +88,7 @@ function App() {
         avatarUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
       }
       const update = { id: session.user.id, display_name: cleanName, username: cleanUsername, bio: editBio.trim(), avatar_url: avatarUrl, updated_at: new Date().toISOString() };
-      const { data, error } = await supabase.from("profiles").upsert(update).select("id, username, display_name, avatar_url, bio").single();
+      const { data, error } = await supabase.from("profiles").update(update).eq("id", session.user.id).select("id, username, display_name, avatar_url, bio").single();
       if (error) throw error;
       setProfile(data as UserProfile);
       setEditProfileOpen(false);
