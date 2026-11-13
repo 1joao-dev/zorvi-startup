@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { AuthScreen } from "@/components/AuthScreen";
-import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, MessageCircle, Moon, MoreHorizontal, Plus, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
+import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, MessageCircle, Moon, MoreHorizontal, Pencil, Plus, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
@@ -123,6 +123,13 @@ function App() {
   const [postMenuId, setPostMenuId] = useState<string | null>(null);
   const [postToDelete, setPostToDelete] = useState<FeedPost | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<FeedPost | null>(null);
+  const [editPostText, setEditPostText] = useState("");
+  const [editPostImage, setEditPostImage] = useState<File | null>(null);
+  const [editPostImagePreview, setEditPostImagePreview] = useState("");
+  const [editPostLocation, setEditPostLocation] = useState("");
+  const [removeEditPostImage, setRemoveEditPostImage] = useState(false);
+  const [savingPostEdit, setSavingPostEdit] = useState(false);
   const [commentsPost, setCommentsPost] = useState<FeedPost | null>(null);
   const [comments, setComments] = useState<FeedComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -194,6 +201,71 @@ function App() {
     setPosts((old) => old.map((item) => item.id === post.id ? { ...item, liked: !post.liked, likes_count: item.likes_count + (post.liked ? -1 : 1) } : item));
     const result = post.liked ? await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", session.user.id) : await supabase.from("post_likes").insert({ post_id: post.id, user_id: session.user.id });
     if (result.error) { notify(result.error.message); await loadFeed(); }
+  };
+  const openEditPost = (post: FeedPost) => {
+    if (post.user_id !== session?.user.id) { notify("Você só pode editar suas próprias publicações."); return; }
+    setPostMenuId(null);
+    setEditingPost(post);
+    setEditPostText(post.content || "");
+    setEditPostImage(null);
+    setEditPostImagePreview(post.image_url || "");
+    setEditPostLocation(post.location_name || "");
+    setRemoveEditPostImage(false);
+  };
+  const chooseEditPostImage = (file?: File) => {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { notify("Use uma imagem JPG, PNG ou WebP."); return; }
+    if (file.size > 8 * 1024 * 1024) { notify("A imagem deve ter no máximo 8 MB."); return; }
+    setEditPostImage(file);
+    setEditPostImagePreview(URL.createObjectURL(file));
+    setRemoveEditPostImage(false);
+  };
+  const closeEditPost = () => {
+    if (savingPostEdit) return;
+    if (editPostImagePreview.startsWith("blob:")) URL.revokeObjectURL(editPostImagePreview);
+    setEditingPost(null); setEditPostText(""); setEditPostImage(null); setEditPostImagePreview(""); setEditPostLocation(""); setRemoveEditPostImage(false);
+  };
+  const savePostEdit = async () => {
+    const post = editingPost;
+    if (!supabase || !session?.user.id || !post) return;
+    if (post.user_id !== session.user.id) { notify("Você só pode editar suas próprias publicações."); closeEditPost(); return; }
+    if (!editPostText.trim() && !editPostImagePreview) { notify("Adicione um texto ou uma foto à publicação."); return; }
+    setSavingPostEdit(true);
+    let uploadedPath: string | null = null;
+    try {
+      let imageUrl = removeEditPostImage ? null : post.image_url;
+      if (editPostImage) {
+        const ext = editPostImage.type === "image/png" ? "png" : editPostImage.type === "image/webp" ? "webp" : "jpg";
+        uploadedPath = session.user.id + "/" + Date.now() + "." + ext;
+        const { error: uploadError } = await supabase.storage.from("post-images").upload(uploadedPath, editPostImage, { contentType: editPostImage.type, cacheControl: "3600" });
+        if (uploadError) throw uploadError;
+        imageUrl = supabase.storage.from("post-images").getPublicUrl(uploadedPath).data.publicUrl;
+      }
+      const nextContent = editPostText.trim();
+      const nextLocation = editPostLocation.trim() || null;
+      const { error } = await supabase.from("posts").update({ content: nextContent, image_url: imageUrl, location_name: nextLocation }).eq("id", post.id).eq("user_id", session.user.id);
+      if (error) throw error;
+      setPosts((old) => old.map((item) => item.id === post.id ? { ...item, content: nextContent, image_url: imageUrl, location_name: nextLocation } : item));
+      if (commentsPost?.id === post.id) setCommentsPost((old) => old ? { ...old, content: nextContent, image_url: imageUrl, location_name: nextLocation } : old);
+      const oldImageUrl = post.image_url;
+      if (oldImageUrl && oldImageUrl !== imageUrl) {
+        try {
+          const marker = "/storage/v1/object/public/post-images/";
+          const pathname = new URL(oldImageUrl).pathname;
+          const markerIndex = pathname.indexOf(marker);
+          if (markerIndex >= 0) {
+            const oldPath = decodeURIComponent(pathname.slice(markerIndex + marker.length));
+            if (oldPath) await supabase.storage.from("post-images").remove([oldPath]);
+          }
+        } catch { /* The post is saved; a stale old image can be cleaned up later. */ }
+      }
+      if (editPostImagePreview.startsWith("blob:")) URL.revokeObjectURL(editPostImagePreview);
+      setEditingPost(null); setEditPostText(""); setEditPostImage(null); setEditPostImagePreview(""); setEditPostLocation(""); setRemoveEditPostImage(false);
+      notify("Publicação atualizada com sucesso!");
+    } catch (cause) {
+      if (uploadedPath) await supabase.storage.from("post-images").remove([uploadedPath]);
+      notify(cause && typeof cause === "object" && "message" in cause ? String((cause as {message?:unknown}).message || "") : "Não foi possível salvar as alterações.");
+    } finally { setSavingPostEdit(false); }
   };
   const deletePost = async () => {
     const post = postToDelete;
@@ -267,7 +339,7 @@ function App() {
           <div className="stories">{["Seu momento","Marina","Pedro","Camila","Lucas"].map((n,i) => <button className="story" key={n} onClick={() => i === 0 ? setComposer(true) : notify("Stories em breve")}><span className={"story-ring story-" + i}>{i === 0 ? <Plus size={20}/> : n[0]}</span><small>{n}</small></button>)}</div>
           {feedLoading && <p className="feed-status">Carregando publicações...</p>}
           {!feedLoading && posts.length === 0 && <div className="feed-empty"><Sparkles size={25}/><b>O feed está esperando por você.</b><span>Compartilhe a primeira descoberta da comunidade ZORVI.</span><button className="primary-button" onClick={() => setComposer(true)}>Criar publicação <Plus size={15}/></button></div>}
-          {posts.map((p) => <article className="post-card" key={p.id}><div className="post-header"><div className="avatar">{p.author?.avatar_url ? <img src={p.author.avatar_url} alt=""/> : (p.author?.display_name || "Z")[0]}</div><div className="post-author"><b>{p.author?.display_name || "Explorador ZORVI"}</b><small>@{p.author?.username || "explorador"} · {new Date(p.created_at).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</small></div>{session?.user.id === p.user_id && <div className="post-menu-wrap"><button type="button" className="icon-button post-menu-trigger" aria-label="Opções da publicação" aria-expanded={postMenuId === p.id} onClick={() => setPostMenuId((current) => current === p.id ? null : p.id)}><MoreHorizontal size={19}/></button>{postMenuId === p.id && <div className="post-menu"><button type="button" onClick={() => { setPostMenuId(null); setPostToDelete(p); }}><Trash2 size={15}/> Excluir publicação</button></div>}</div>}</div>{p.content && <p className="post-copy">{p.content}</p>}{p.image_url && <div className="post-image-wrap"><img src={p.image_url} alt="Imagem da publicação"/><span className="post-tag">DESCOBERTA</span></div>}{p.location_name && <div className="post-place"><MapPin size={14}/> {p.location_name}</div>}<div className="post-actions"><button className={p.liked ? "action-active" : ""} onClick={() => void toggleLike(p)}><Heart size={19} fill={p.liked ? "currentColor" : "none"}/> {p.likes_count}</button><button onClick={() => void openComments(p)}><MessageCircle size={19}/> {p.comments_count}</button><button onClick={() => { void navigator.clipboard?.writeText(window.location.href + "?post=" + p.id); notify("Link da publicação copiado."); }}><Share2 size={18}/></button></div></article>)}
+          {posts.map((p) => <article className="post-card" key={p.id}><div className="post-header"><div className="avatar">{p.author?.avatar_url ? <img src={p.author.avatar_url} alt=""/> : (p.author?.display_name || "Z")[0]}</div><div className="post-author"><b>{p.author?.display_name || "Explorador ZORVI"}</b><small>@{p.author?.username || "explorador"} · {new Date(p.created_at).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</small></div>{session?.user.id === p.user_id && <div className="post-menu-wrap"><button type="button" className="icon-button post-menu-trigger" aria-label="Opções da publicação" aria-expanded={postMenuId === p.id} onClick={() => setPostMenuId((current) => current === p.id ? null : p.id)}><MoreHorizontal size={19}/></button>{postMenuId === p.id && <div className="post-menu"><button type="button" className="edit-post-action" onClick={() => openEditPost(p)}><Pencil size={15}/> Editar publicação</button><button type="button" className="delete-post-action" onClick={() => { setPostMenuId(null); setPostToDelete(p); }}><Trash2 size={15}/> Excluir publicação</button></div>}</div>}</div>{p.content && <p className="post-copy">{p.content}</p>}{p.image_url && <div className="post-image-wrap"><img src={p.image_url} alt="Imagem da publicação"/><span className="post-tag">DESCOBERTA</span></div>}{p.location_name && <div className="post-place"><MapPin size={14}/> {p.location_name}</div>}<div className="post-actions"><button className={p.liked ? "action-active" : ""} onClick={() => void toggleLike(p)}><Heart size={19} fill={p.liked ? "currentColor" : "none"}/> {p.likes_count}</button><button onClick={() => void openComments(p)}><MessageCircle size={19}/> {p.comments_count}</button><button onClick={() => { void navigator.clipboard?.writeText(window.location.href + "?post=" + p.id); notify("Link da publicação copiado."); }}><Share2 size={18}/></button></div></article>)}
           <p className="demo-note">Conteúdo demonstrativo · ofertas e locais reais serão conectados futuramente.</p>
         </section>}
         {tab === "map" && <section className="screen">
@@ -301,6 +373,14 @@ function App() {
       <button className="primary-button profile-save-button" disabled={profileSaving} onClick={saveProfile}>{profileSaving ? "Salvando..." : "Salvar alterações"} <Check size={16}/></button>
     </div></div>}
     {composer && <div className="modal-backdrop" onClick={() => !publishing && setComposer(false)}><div className="composer-modal feed-composer" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Nova publicação</h2><button className="icon-button" onClick={() => setComposer(false)} disabled={publishing}><X size={19}/></button></div><textarea value={postText} maxLength={2200} onChange={(e) => setPostText(e.target.value)} placeholder="Compartilhe uma descoberta com a comunidade..."/><label className="post-image-picker"><Camera size={17}/> {postImage ? "Trocar imagem" : "Adicionar foto"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => choosePostImage(e.target.files?.[0])}/></label>{postImagePreview && <div className="post-preview"><img src={postImagePreview} alt="Prévia"/><button onClick={() => {setPostImage(null);setPostImagePreview("");}}>Remover foto</button></div>}<label className="profile-form-label">Local ou estabelecimento (opcional)<input value={postLocation} maxLength={120} onChange={(e) => setPostLocation(e.target.value)} placeholder="Ex.: Café no centro de Teresina"/></label><div className="composer-footer"><small>{postText.length}/2200 · Foto até 8 MB</small><button className="primary-button" disabled={publishing || (!postText.trim() && !postImage)} onClick={() => void publish()}>{publishing ? "Publicando..." : "Publicar"} <ArrowRight size={16}/></button></div></div></div>}
+    {editingPost && <div className="modal-backdrop" onClick={closeEditPost}><div className="composer-modal feed-composer edit-post-modal" role="dialog" aria-modal="true" aria-labelledby="edit-post-title" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-head"><h2 id="edit-post-title">Editar publicação</h2><button className="icon-button" onClick={closeEditPost} disabled={savingPostEdit} aria-label="Fechar"><X size={19}/></button></div>
+      <textarea value={editPostText} maxLength={2200} onChange={(e) => setEditPostText(e.target.value)} placeholder="Compartilhe uma descoberta com a comunidade..."/>
+      <label className="post-image-picker"><Camera size={17}/> {editPostImagePreview ? "Trocar imagem" : "Adicionar foto"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => chooseEditPostImage(e.target.files?.[0])}/></label>
+      {editPostImagePreview && <div className="post-preview"><img src={editPostImagePreview} alt="Prévia da foto da publicação"/><button type="button" disabled={savingPostEdit} onClick={() => { if (editPostImagePreview.startsWith("blob:")) URL.revokeObjectURL(editPostImagePreview); setEditPostImage(null); setEditPostImagePreview(""); setRemoveEditPostImage(true); }}>Remover foto</button></div>}
+      <label className="profile-form-label">Local ou estabelecimento (opcional)<input value={editPostLocation} maxLength={120} onChange={(e) => setEditPostLocation(e.target.value)} placeholder="Ex.: Café no centro de Teresina"/></label>
+      <div className="composer-footer"><small>{editPostText.length}/2200 · Foto até 8 MB</small><button className="primary-button" disabled={savingPostEdit || (!editPostText.trim() && !editPostImagePreview)} onClick={() => void savePostEdit()}>{savingPostEdit ? "Salvando..." : "Salvar alterações"} <Check size={16}/></button></div>
+    </div></div>}
     {postToDelete && <div className="modal-backdrop" onClick={() => deletingPostId !== postToDelete.id && setPostToDelete(null)}><div className="composer-modal delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-post-title" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2 id="delete-post-title">Excluir publicação?</h2><button className="icon-button" onClick={() => setPostToDelete(null)} disabled={deletingPostId === postToDelete.id} aria-label="Fechar"><X size={19}/></button></div><p>Essa ação não pode ser desfeita. As curtidas e os comentários desta publicação também serão removidos.</p><div className="delete-confirm-actions"><button type="button" className="cancel-delete-button" onClick={() => setPostToDelete(null)} disabled={deletingPostId === postToDelete.id}>Cancelar</button><button type="button" className="danger-delete-button" onClick={() => void deletePost()} disabled={deletingPostId === postToDelete.id}>{deletingPostId === postToDelete.id ? "Excluindo..." : "Excluir publicação"} <Trash2 size={15}/></button></div></div></div>}
     {commentsPost && <div className="modal-backdrop" onClick={() => setCommentsPost(null)}><div className="composer-modal comments-modal" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Comentários</h2><button className="icon-button" onClick={() => setCommentsPost(null)}><X size={19}/></button></div><div className="comments-list">{commentsLoading ? <p>Carregando comentários...</p> : comments.length ? comments.map((comment) => <div className="comment-item" key={comment.id}><b>{comment.author?.display_name || "Explorador ZORVI"}</b><p>{comment.content}</p><small>{new Date(comment.created_at).toLocaleString("pt-BR")}</small></div>) : <p className="comments-empty">Seja a primeira pessoa a comentar.</p>}</div><form className="comment-form" onSubmit={(e) => {e.preventDefault();void sendComment();}}><input value={commentText} onChange={(e) => setCommentText(e.target.value)} maxLength={1000} placeholder="Escreva um comentário..."/><button className="primary-button" disabled={commentSending || !commentText.trim()}><Send size={16}/></button></form></div></div>}
     {showSplash && <div className="zorvi-splash" aria-label="ZORVI"><img src="/zorvi-mark.webp" alt="" /><div className="splash-word">ZORVI</div><p>Tudo se conecta. Tudo se descobre.</p><span className="splash-loader" /></div>}
