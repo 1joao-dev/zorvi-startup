@@ -133,3 +133,6 @@ drop policy if exists "Authenticated users can read verified prices and own repo
 drop policy if exists "Users can submit pending community price reports" on public.price_observations;create policy "Users can submit pending community price reports" on public.price_observations for insert to authenticated with check(submitted_by=(select auth.uid()) and verification_status='pending' and price_type='community_report');
 drop policy if exists "Users can update their own pending price reports" on public.price_observations;create policy "Users can update their own pending price reports" on public.price_observations for update to authenticated using(submitted_by=(select auth.uid()) and verification_status='pending') with check(submitted_by=(select auth.uid()) and verification_status='pending' and price_type='community_report');
 drop policy if exists "Users can delete their own pending price reports" on public.price_observations;create policy "Users can delete their own pending price reports" on public.price_observations for delete to authenticated using(submitted_by=(select auth.uid()) and verification_status='pending');
+
+create index if not exists stores_owner_user_id_idx on public.stores(owner_user_id);
+create index if not exists price_observations_submitted_by_idx on public.price_observations(submitted_by);
