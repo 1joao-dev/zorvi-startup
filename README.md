@@ -39,11 +39,21 @@ npm run lint
 npm test
 ```
 
+## Supabase: autenticação e perfis
+
+A primeira integração está preparada para Supabase Auth e perfis.
+
+1. Crie um projeto em https://supabase.com.
+2. No SQL Editor, execute `supabase/schema.sql`.
+3. Copie `.env.example` para `.env.local` e preencha a URL e a chave pública (anon/publishable) do projeto.
+4. Reinicie `npm run dev`. Com as variáveis configuradas, o app passa a exigir login e oferece cadastro e recuperação de senha.
+5. Em Authentication > URL Configuration, adicione a URL local e a URL publicada à lista de Redirect URLs.
+
+Nunca coloque a `service_role` key no frontend. Use somente a chave pública anon/publishable; a proteção dos dados é feita por RLS no banco.
+
 ## Próximas integrações
 
-A interface atual usa conteúdo de demonstração. Ainda não há autenticação, persistência, dados de preços/ofertas em tempo real, mapa Mapbox ou modelo de IA conectado. Planejamento de integrações futuras:
-
-1. Supabase para autenticação, perfis, publicações e dados.
+1. Persistência de publicações, curtidas e comentários no Supabase.
 2. Mapbox para mapas e geolocalização, com consentimento do usuário.
 3. Gateway seguro de IA para o chat ZORVI AI.
 4. Fontes verificadas para preços, estabelecimentos e promoções.

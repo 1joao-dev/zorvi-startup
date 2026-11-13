@@ -28,3 +28,33 @@
 @keyframes splashMark{from{opacity:0;transform:translateY(12px) scale(.88)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes loadSplash{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes splashOut{to{opacity:0;visibility:hidden;pointer-events:none}}
+
+
+/* Supabase authentication */
+.zorvi-auth-loading,.zorvi-auth-page{min-height:100dvh;background:radial-gradient(ellipse at 50% 0%,#24103e 0%,#10091b 38%,#080610 78%);color:#f8f6ff;font-family:"DM Sans",sans-serif}
+.zorvi-auth-loading{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:15px;font-size:12px;color:#c6b6d9}
+.zorvi-auth-loading img{width:68px;height:68px;object-fit:cover;border-radius:18px;box-shadow:0 0 35px #8d28ff70}
+.zorvi-auth-page{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px 20px max(28px,env(safe-area-inset-bottom));}
+.zorvi-auth-brand{display:flex;align-items:center;gap:9px;font:700 25px "Space Grotesk",sans-serif;letter-spacing:1.7px;margin-bottom:28px}
+.zorvi-auth-brand img{width:39px;height:39px;border-radius:12px;object-fit:cover;box-shadow:0 0 20px #7200ff70}
+.zorvi-auth-card{width:100%;max-width:420px;border:1px solid #ffffff14;background:#100d1bf2;border-radius:24px;padding:25px 20px;box-shadow:0 25px 80px #0006}
+.zorvi-auth-orb{width:54px;height:54px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(145deg,#a83cff,#6500df);color:white;box-shadow:0 8px 25px #7200ff55;margin-bottom:20px}
+.zorvi-auth-card .eyebrow{font-size:8px}
+.zorvi-auth-card h1{font:700 27px/1.12 "Space Grotesk",sans-serif;letter-spacing:-.8px;margin:0}
+.zorvi-auth-subtitle{font-size:11px;line-height:1.55;color:#a99db8;margin:9px 0 22px}
+.zorvi-auth-form{display:flex;flex-direction:column;gap:11px}
+.zorvi-auth-field{height:49px;display:flex;align-items:center;gap:10px;padding:0 13px;border:1px solid #ffffff18;border-radius:13px;background:#080610;color:#b98aff}
+.zorvi-auth-field:focus-within{border-color:#9b35ff;box-shadow:0 0 0 3px #7200ff20}
+.zorvi-auth-field input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font-size:11px}
+.zorvi-auth-field input::placeholder{color:#81778f}
+.zorvi-auth-field button{border:0;background:none;color:#a99db8;display:grid;place-items:center;padding:4px}
+.zorvi-auth-forgot{align-self:flex-end;border:0;background:none;color:#c18aff;font-size:10px;padding:1px 0 5px}
+.zorvi-auth-submit{height:48px;display:flex;align-items:center;justify-content:center;gap:9px;border:0;border-radius:13px;background:linear-gradient(110deg,#9b35ff,#7200ff);color:white;font-size:12px;font-weight:700;box-shadow:0 8px 22px #7200ff3d;margin-top:3px}
+.zorvi-auth-submit:disabled{opacity:.55}
+.zorvi-auth-switch{text-align:center;font-size:10px;color:#a99db8;margin-top:20px}
+.zorvi-auth-switch button,.zorvi-auth-back{border:0;background:none;color:#ca9aff;font-weight:700}
+.zorvi-auth-back{display:flex;align-items:center;gap:6px;margin:15px auto 0;font-size:10px}
+.zorvi-auth-error,.zorvi-auth-success{font-size:10px;line-height:1.5;padding:10px 11px;border-radius:10px;margin:0}
+.zorvi-auth-error{background:#ff42651a;color:#ff9eaf;border:1px solid #ff426533}
+.zorvi-auth-success{background:#48d59718;color:#91e8bd;border:1px solid #48d59733}
+.zorvi-auth-legal{max-width:340px;text-align:center;color:#82778f;font-size:9px;line-height:1.6;margin:18px 0 0}
