@@ -36,7 +36,7 @@ function ensureLeaflet():Promise<LeafletApi>{
   return leafletLoader;
 }
 function formatMapPrice(value:number){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(value);}
-function escapeMapHtml(value:string){return value.replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]||char));}
+function escapeMapHtml(value:string){const entities:Record<string,string>={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};return value.replace(/[&<>"']/g,char=>entities[char]||char);}
 function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category">){
   const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
   const slug=store.brand_slug||(name.toLowerCase().includes("drogasil")?"drogasil":name.toLowerCase().includes("globo")?"globo":name.toLowerCase().includes("pague menos")?"pague-menos":"");
