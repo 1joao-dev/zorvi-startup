@@ -1,24 +1,51 @@
-# Startup em Movimento
+# ZORVI
 
-Quero criar uma startup
+**Tudo se conecta. Tudo se descobre.**
 
-This project was built with [Lovable](https://lovable.dev).
+A ZORVI é uma experiência social mobile-first para descobrir pessoas, estabelecimentos, produtos, preços, promoções e experiências em um só lugar.
 
-## Build with Lovable
+## Experiência atual
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/522ef656-21b0-4f6e-8adb-f0adcea6c194).
+- **Início:** feed da comunidade, publicações demonstrativas, curtidas, favoritos e criação de post.
+- **Mapa:** visualização ilustrativa de locais, filtros por categoria e pesquisa.
+- **ZORVI AI:** interface de chat com sugestões de perguntas e respostas de demonstração.
+- **Explorar:** categorias e atalhos para descobertas.
+- **Perfil:** perfil demonstrativo, itens salvos e alternância entre tema escuro e claro.
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+## Stack
 
-## Development
+- React 19 + TypeScript
+- TanStack Start / Router
+- Vite
+- Tailwind CSS v4
+- Lucide React
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Desenvolvimento local
+
+Requer Node.js e npm (ou Bun).
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+git clone https://github.com/joaosystemss/startup-em-movimento.git
+cd startup-em-movimento
+npm install
 npm run dev
 ```
+
+Comandos úteis:
+
+```sh
+npm run build
+npm run lint
+npm test
+```
+
+## Próximas integrações
+
+A interface atual usa conteúdo de demonstração. Ainda não há autenticação, persistência, dados de preços/ofertas em tempo real, mapa Mapbox ou modelo de IA conectado. Planejamento de integrações futuras:
+
+1. Supabase para autenticação, perfis, publicações e dados.
+2. Mapbox para mapas e geolocalização, com consentimento do usuário.
+3. Gateway seguro de IA para o chat ZORVI AI.
+4. Fontes verificadas para preços, estabelecimentos e promoções.
+
+**Importante:** locais, distâncias, publicações e respostas exibidos na versão inicial são demonstrativos e não representam ofertas ou informações verificadas.
