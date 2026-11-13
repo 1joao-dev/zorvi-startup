@@ -13,6 +13,10 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+-- Permissões SQL necessárias para a API do Supabase; RLS continua filtrando por usuário.
+grant select on table public.profiles to anon, authenticated;
+grant update on table public.profiles to authenticated;
+
 -- Perfis públicos podem ser consultados pela comunidade.
 drop policy if exists "Profiles are viewable by everyone" on public.profiles;
 create policy "Profiles are viewable by everyone"
