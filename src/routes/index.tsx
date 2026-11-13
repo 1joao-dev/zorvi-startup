@@ -94,8 +94,18 @@ function App() {
       setEditProfileOpen(false);
       notify("Perfil atualizado com sucesso!");
     } catch (cause) {
-      const msg = cause instanceof Error ? cause.message : "Não foi possível salvar seu perfil.";
-      notify(msg.includes("profiles_username_key") || msg.toLowerCase().includes("duplicate key") ? "Esse username já está em uso." : msg);
+      const detail = cause && typeof cause === "object" && "message" in cause
+        ? String((cause as { message?: unknown }).message || "")
+        : cause instanceof Error ? cause.message : "";
+      const code = cause && typeof cause === "object" && "code" in cause
+        ? String((cause as { code?: unknown }).code || "") : "";
+      const msg = detail || "Não foi possível salvar seu perfil. Verifique sua conexão e tente novamente.";
+      const friendly = code === "23505" || msg.includes("profiles_username_key") || msg.toLowerCase().includes("duplicate key")
+        ? "Esse username já está em uso. Escolha outro."
+        : code === "42501" || msg.toLowerCase().includes("permission denied")
+          ? "O banco bloqueou a alteração por falta de permissão. Atualize o aplicativo e tente novamente."
+          : msg;
+      notify(friendly);
     } finally { setProfileSaving(false); }
   };
   const signOut = async () => { if (supabase) { const { error } = await supabase.auth.signOut(); if (error) notify(error.message); else notify("Você saiu da sua conta."); } };
