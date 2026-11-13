@@ -461,10 +461,37 @@ function App() {
     if (!supabase || geocodingStores) return;
     setGeocodingStores(true);
     try {
-      const { data, error } = await supabase.functions.invoke("geocode-stores", { body: { category: filter === "Todos" ? null : filter } });
-      if (error) throw error;
-      notify(data?.message || "Processo de localização concluído.");
+      let totalUpdated = 0;
+      let totalProcessed = 0;
+      let totalNotLocated = 0;
+      let totalFailed = 0;
+      let previousRemaining = Number.POSITIVE_INFINITY;
+
+      // The Edge Function processes five addresses per request to respect the geocoder.
+      // Continue in batches so one tap can populate the whole visible map.
+      for (let round = 0; round < 10; round += 1) {
+        const { data, error } = await supabase.functions.invoke("geocode-stores", {
+          body: { category: filter === "Todos" ? null : filter },
+        });
+        if (error) throw error;
+
+        const processed = Number(data?.processed || 0);
+        const remaining = Number(data?.remaining || 0);
+        totalProcessed += processed;
+        totalUpdated += Number(data?.updated || 0);
+        totalNotLocated += Array.isArray(data?.notLocated) ? data.notLocated.length : 0;
+        totalFailed += Array.isArray(data?.failed) ? data.failed.length : 0;
+
+        if (processed === 0 || remaining === 0 || remaining >= previousRemaining) break;
+        previousRemaining = remaining;
+      }
+
       await loadNearbyStores();
+      if (totalUpdated > 0) {
+        notify(`${totalUpdated} lojas receberam coordenadas. ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
+      } else {
+        notify(`Foram verificadas ${totalProcessed} lojas. Nenhuma coordenada foi confirmada; ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
+      }
     } catch (error) {
       notify(error && typeof error === "object" && "message" in error
         ? String((error as { message?: unknown }).message || "")
@@ -662,7 +689,7 @@ function App() {
             <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={17}/></button>
             <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácia</span><span><i className="legend-market"/> Mercado</span><span><i className="legend-other"/> Outros</span></div>
           </div>
-          {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note"><span>{mapStores.filter(store=>store.latitude===null||store.longitude===null).length} lojas aguardam coordenadas. {mapStores.filter(store=>(store.latitude===null||store.longitude===null)&&!store.geocode_attempted_at).length} ainda podem ser localizadas automaticamente.</span><button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null||Boolean(store.geocode_attempted_at))}>{geocodingStores?"Localizando...":"Localizar próximas 5 lojas"}</button></div>}
+          {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note"><span>{mapStores.filter(store=>store.latitude===null||store.longitude===null).length} lojas aguardam coordenadas. {mapStores.filter(store=>(store.latitude===null||store.longitude===null)&&!store.geocode_attempted_at).length} ainda podem ser localizadas automaticamente.</span><button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null||Boolean(store.geocode_attempted_at))}>{geocodingStores?"Localizando...":"Localizar todas"}</button></div>}
           <div className="nearby-head"><div><p className="eyebrow">{searchPerformed?"LOJAS QUE COMBINAM COM SUA BUSCA":"ESTABELECIMENTOS CADASTRADOS"}</p><h2>{mapStores.length} locais encontrados</h2></div><button className="text-link" onClick={()=>void loadNearbyStores()}>Atualizar</button></div>
           <div className="place-list">{mapStores.map(s=>{const brand=getStoreBrand(s);return <div className="place-row" key={s.id}><span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}>{s.brand_logo_url?<img src={s.brand_logo_url} alt={brand.name}/>:brand.initials}</span><span className="place-info"><b>{s.brand_name||s.name}</b><small>{s.address} · {s.city}</small></span><span className="place-distance">{typeof s.mapPrice==="number"?formatMapPrice(s.mapPrice):searchPerformed?"Sem preço":s.distance===null?"Localização pendente":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={s.latitude!==null&&s.longitude!==null?`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`:`https://www.openstreetmap.org/search?query=${encodeURIComponent(`${s.address}, ${s.city}, ${s.state}, Brasil`)}`} target="_blank" rel="noreferrer" aria-label="Ver endereço no mapa"><ArrowRight size={16}/></a></div>;})}{storeError?<p className="empty-state">{storeError}</p>:!catalogLoading&&mapStores.length===0&&<p className="empty-state">Nenhum estabelecimento encontrado nesta categoria.</p>}</div>
           {selectedMapStore&&<div className="map-selected-store"><button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={16}/></button><span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}>{getStoreBrand(selectedMapStore).initials}</span><div className="place-info"><b>{selectedMapStore.brand_name||selectedMapStore.name}</b><small>{selectedMapStore.address} · {selectedMapStore.city}</small>{typeof selectedMapStore.mapPrice==="number"?<strong>{formatMapPrice(selectedMapStore.mapPrice)} <small>· preço confirmado</small></strong>:searchPerformed?<small>Preço ainda não confirmado para esta unidade.</small>:null}</div>{selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}</div>}

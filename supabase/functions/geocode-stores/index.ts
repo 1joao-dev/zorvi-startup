@@ -138,7 +138,7 @@ Deno.serve(async (request: Request) => {
       if (updateError) throw updateError;
       updated += 1;
     } catch {
-      await admin.from("stores").update({ geocode_attempted_at: new Date().toISOString() }).eq("id", store.id).is("latitude", null).is("longitude", null);
+      // Keep temporary network/geocoder failures eligible for a later retry.
       failed.push(store.name);
     }
   }
