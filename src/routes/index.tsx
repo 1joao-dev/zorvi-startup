@@ -376,23 +376,35 @@ function App() {
   };
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setLocationStatus("Geolocalização não disponível neste dispositivo.");
+      setUserLocation(null);
+      setLocationStatus("Este navegador não oferece localização por GPS.");
       return;
     }
-    setLocationStatus("Obtendo sua localização...");
+    setUserLocation(null);
+    setLocationStatus("Verificando a precisão do GPS...");
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        const accuracy = Number(coords.accuracy);
+        if (!Number.isFinite(accuracy) || accuracy > 250) {
+          const accuracyLabel = Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : "indefinida";
+          setUserLocation(null);
+          setLocationStatus(`Localização imprecisa (${accuracyLabel}). Ative a localização precisa ou teste pelo GPS do celular.`);
+          return;
+        }
         setUserLocation({ lat: coords.latitude, lon: coords.longitude });
-        setLocationStatus("Localização atualizada.");
+        setLocationStatus(`GPS confirmado · precisão de ±${Math.round(accuracy)} m`);
       },
       (error) => {
+        setUserLocation(null);
         setLocationStatus(
           error.code === error.PERMISSION_DENIED
-            ? "Permissão negada. Ative a localização no navegador."
-            : "Não foi possível obter sua localização."
+            ? "Permissão negada. Libere a localização nas configurações do navegador."
+            : error.code === error.POSITION_UNAVAILABLE
+              ? "O dispositivo não conseguiu determinar sua posição. Verifique o GPS."
+              : "O GPS demorou para responder. Tente novamente em uma área aberta."
         );
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   }, []);
 
@@ -572,9 +584,10 @@ function App() {
       if (!leafletMapRef.current) {
         const map = leaflet.map(mapContainerRef.current, { zoomControl: false, scrollWheelZoom: false });
         map.setView([-5.0892, -42.8016], 13);
-        leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        leaflet.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+          maxZoom: 20,
+          subdomains: "abcd",
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
         }).addTo(map);
         leafletMapRef.current = map;
         leafletMarkerLayerRef.current = leaflet.layerGroup().addTo(map);
@@ -595,8 +608,13 @@ function App() {
   }, [tab, mapInstanceKey]);
 
   useEffect(() => {
-    if (mapReady && userLocation && leafletMapRef.current) {
+    if (!mapReady || !leafletMapRef.current) return;
+    if (userLocation) {
       leafletMapRef.current.setView([userLocation.lat, userLocation.lon], 15);
+    } else {
+      // Without a sufficiently accurate GPS fix, show the city reference point,
+      // never a guessed device location.
+      leafletMapRef.current.setView([-5.0892, -42.8016], 13);
     }
   }, [mapReady, userLocation]);
 
@@ -616,15 +634,24 @@ function App() {
       const logoUrl = store.brand_logo_url && /^https?:\/\//i.test(store.brand_logo_url)
         ? escapeMapHtml(store.brand_logo_url)
         : "";
-      const markerHtml = `<div class="zorvi-brand-marker" style="--brand-accent:${brand.color}">
-        <span class="zorvi-brand-avatar">${logoUrl ? `<img src="${logoUrl}" alt="" />` : `<span>${escapeMapHtml(brand.initials)}</span>`}</span>
-        <span class="zorvi-brand-label"><b>${escapeMapHtml(markerTitle)}</b><small>${escapeMapHtml(brand.name)}</small></span>
+      const categoryGlyph = store.category === "Farmácia"
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+        : store.category === "Mercado"
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18l-1.5 11h-15L3 9ZM5 9l2-5h10l2 5M9 13v3M15 13v3"/></svg>'
+          : store.category === "Restaurante"
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3v7a3 3 0 0 0 6 0V3M7 3v18M17 3v18M17 3c4 3 4 7 0 9"/></svg>'
+            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3zM5 10V5h14v5M8 14h8"/></svg>';
+      const markerHtml = `<div class="zorvi-map-marker" style="--brand-accent:${brand.color}">
+        <span class="zorvi-map-marker-symbol">${logoUrl ? `<img src="${logoUrl}" alt="" />` : `<b>${escapeMapHtml(brand.initials)}</b>`}
+          <i class="zorvi-map-marker-category">${categoryGlyph}</i>
+        </span>
+        <span class="zorvi-map-marker-label"><b>${escapeMapHtml(markerTitle)}</b><small>${escapeMapHtml(brand.name)}</small></span>
       </div>`;
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: [142, 48],
-        iconAnchor: [71, 24],
+        iconSize: [152, 48],
+        iconAnchor: [76, 24],
         popupAnchor: [0, -25],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon }).addTo(markerLayer);
@@ -682,7 +709,7 @@ function App() {
           <div className="location-status"><span>{locationStatus}</span><button onClick={requestLocation}><LocateFixed size={15}/> Usar GPS</button></div>
           <div className="filter-row">{["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}</div>
           <div className="zorvi-map-frame">
-            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation?"SUA LOCALIZAÇÃO":"TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} pontos no mapa</span></div>
+            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation?"GPS CONFIRMADO":"TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} pontos no mapa</span></div>
             <div ref={mapContainerRef} className="zorvi-leaflet-map" aria-label="Mapa interativo de estabelecimentos e preços"/>
             {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b></div>}
             {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
