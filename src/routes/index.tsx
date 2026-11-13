@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Bell, Bookmark, Check, Compass, Heart, Home, MapPin, MessageCircle, Moon, Plus, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
@@ -16,6 +16,8 @@ const seedPosts = [
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
+  const [showSplash, setShowSplash] = useState(true);
+  useEffect(() => { const splashTimer = window.setTimeout(() => setShowSplash(false), 1500); return () => window.clearTimeout(splashTimer); }, []);
   const [dark, setDark] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todos");
@@ -43,7 +45,7 @@ function App() {
   return <div className={"zorvi-app " + (dark ? "theme-dark" : "theme-light")}>
     <div className="app-shell">
       <header className="topbar">
-        <div><div className="brand"><span className="brand-mark"><Zap size={18} fill="currentColor" /></span>ZORVI</div><p className="tagline">Tudo se conecta. Tudo se descobre.</p></div>
+        <div><div className="brand"><img className="brand-mark-image" src="/zorvi-mark.webp" alt="Símbolo ZORVI" /><span>ZORVI</span></div><p className="tagline">Tudo se conecta. Tudo se descobre.</p></div>
         <div className="top-actions"><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Alternar tema">{dark ? <Sun size={19}/> : <Moon size={19}/>}</button><button className="icon-button" onClick={() => notify("Nenhuma notificação nova")} aria-label="Notificações"><Bell size={19}/></button><button className="avatar avatar-top" onClick={() => setTab("profile")}>J</button></div>
       </header>
       <main className="main-content">
@@ -67,7 +69,7 @@ function App() {
           <p className="demo-note">Pontos e distâncias ilustrativos. Mapbox e localização real serão integrados em uma próxima etapa.</p>
         </section>}
         {tab === "ai" && <section className="screen ai-screen">
-          <div className="ai-heading"><div className="ai-orb"><Sparkles size={25}/></div><p className="eyebrow">SUA COMPANHEIRA DE DESCOBERTAS</p><h1>Olá! Eu sou a<br/><span>ZORVI AI.</span></h1><p>Uma nova forma de encontrar, comparar e descobrir o mundo ao seu redor.</p></div>
+          <div className="ai-heading"><div className="ai-orb"><img src="/zorvi-mark.webp" alt="Símbolo ZORVI" /></div><p className="eyebrow">SUA COMPANHEIRA DE DESCOBERTAS</p><h1>Olá! Eu sou a<br/><span>ZORVI AI.</span></h1><p>Uma nova forma de encontrar, comparar e descobrir o mundo ao seu redor.</p></div>
           <div className="chat-panel"><div className="chat-top"><div className="ai-mini"><Sparkles size={16}/></div><div><b>ZORVI AI</b><small><i className="online-dot"/> Assistente demonstrativo</small></div><button className="icon-button" onClick={() => setChat([{role:"assistant",text:"Conversa reiniciada! O que você quer descobrir hoje?"}])}>•••</button></div>
           <div className="chat-messages">{chat.map((m,i) => <div className={"chat-message " + m.role} key={i}>{m.role === "assistant" && <span className="chat-avatar"><Sparkles size={13}/></span>}<p>{m.text}</p></div>)}</div>
           <div className="suggestion-label">EXPERIMENTE PERGUNTAR</div><div className="suggestions"><button onClick={() => send("Onde encontro um produto mais barato?")}><Wallet size={14}/> Onde encontro mais barato?</button><button onClick={() => send("Quais lugares legais existem perto de mim?")}><Compass size={14}/> Lugares legais por perto</button><button onClick={() => send("Quero descobrir promoções de hoje.")}><Zap size={14}/> Promoções de hoje</button></div>
@@ -80,6 +82,7 @@ function App() {
       <nav className="bottom-nav" aria-label="Navegação principal">{[{id:"home" as Tab,label:"Início",icon:Home},{id:"map" as Tab,label:"Mapa",icon:MapPin},{id:"ai" as Tab,label:"ZORVI AI",icon:Sparkles},{id:"search" as Tab,label:"Explorar",icon:Compass},{id:"profile" as Tab,label:"Perfil",icon:UserRound}].map((item) => {const Icon=item.icon;return <button key={item.id} className={"nav-item "+(tab===item.id?"active":"")+(item.id==="ai"?" nav-ai":"")} onClick={() => setTab(item.id)}><span><Icon size={item.id==="ai"?21:20}/></span><small>{item.label}</small></button>;})}</nav>
     </div>
     {composer && <div className="modal-backdrop" onClick={() => setComposer(false)}><div className="composer-modal" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Nova publicação</h2><button className="icon-button" onClick={() => setComposer(false)}><X size={19}/></button></div><textarea value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Compartilhe uma descoberta com a comunidade..."/><div className="composer-footer"><span><MapPin size={14}/> Adicionar localização</span><button className="primary-button" disabled={!postText.trim()} onClick={publish}>Publicar <ArrowRight size={16}/></button></div></div></div>}
+    {showSplash && <div className="zorvi-splash" aria-label="ZORVI"><img src="/zorvi-mark.webp" alt="" /><div className="splash-word">ZORVI</div><p>Tudo se conecta. Tudo se descobre.</p><span className="splash-loader" /></div>}
     {toast && <div className="toast"><Check size={16}/>{toast}</div>}
   </div>;
 }
