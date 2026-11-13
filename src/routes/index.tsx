@@ -709,7 +709,7 @@ function App() {
           <div className="location-status"><span>{locationStatus}</span><button onClick={requestLocation}><LocateFixed size={15}/> Usar GPS</button></div>
           <div className="filter-row">{["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}</div>
           <div className="zorvi-map-frame">
-            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation?"GPS CONFIRMADO":"TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} pontos no mapa</span></div>
+            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation?"GPS CONFIRMADO":"TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length===1?"ponto":"pontos"} no mapa</span></div>
             <div ref={mapContainerRef} className="zorvi-leaflet-map" aria-label="Mapa interativo de estabelecimentos e preços"/>
             {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b></div>}
             {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
