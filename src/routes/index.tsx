@@ -216,6 +216,7 @@ function App() {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { notify("Use uma imagem JPG, PNG ou WebP."); return; }
     if (file.size > 8 * 1024 * 1024) { notify("A imagem deve ter no máximo 8 MB."); return; }
+    if (editPostImagePreview.startsWith("blob:")) URL.revokeObjectURL(editPostImagePreview);
     setEditPostImage(file);
     setEditPostImagePreview(URL.createObjectURL(file));
     setRemoveEditPostImage(false);
@@ -243,8 +244,9 @@ function App() {
       }
       const nextContent = editPostText.trim();
       const nextLocation = editPostLocation.trim() || null;
-      const { error } = await supabase.from("posts").update({ content: nextContent, image_url: imageUrl, location_name: nextLocation }).eq("id", post.id).eq("user_id", session.user.id);
+      const { data: updatedPost, error } = await supabase.from("posts").update({ content: nextContent, image_url: imageUrl, location_name: nextLocation }).eq("id", post.id).eq("user_id", session.user.id).select("id").maybeSingle();
       if (error) throw error;
+      if (!updatedPost) throw new Error("Não foi possível localizar a publicação para atualizar.");
       setPosts((old) => old.map((item) => item.id === post.id ? { ...item, content: nextContent, image_url: imageUrl, location_name: nextLocation } : item));
       if (commentsPost?.id === post.id) setCommentsPost((old) => old ? { ...old, content: nextContent, image_url: imageUrl, location_name: nextLocation } : old);
       const oldImageUrl = post.image_url;
@@ -263,7 +265,7 @@ function App() {
       setEditingPost(null); setEditPostText(""); setEditPostImage(null); setEditPostImagePreview(""); setEditPostLocation(""); setRemoveEditPostImage(false);
       notify("Publicação atualizada com sucesso!");
     } catch (cause) {
-      if (uploadedPath) await supabase.storage.from("post-images").remove([uploadedPath]);
+      if (uploadedPath) { try { await supabase.storage.from("post-images").remove([uploadedPath]); } catch { /* Keep the original post unchanged if cleanup fails. */ } }
       notify(cause && typeof cause === "object" && "message" in cause ? String((cause as {message?:unknown}).message || "") : "Não foi possível salvar as alterações.");
     } finally { setSavingPostEdit(false); }
   };
