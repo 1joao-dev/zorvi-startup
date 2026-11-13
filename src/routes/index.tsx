@@ -613,7 +613,7 @@ function App() {
       const markerTitle = hasPrice
         ? formatMapPrice(store.mapPrice as number)
         : searchPerformed ? "Sem preço" : brand.name;
-      const logoUrl = store.brand_logo_url && /^https?:\\/\\//i.test(store.brand_logo_url)
+      const logoUrl = store.brand_logo_url && /^https?:\/\//i.test(store.brand_logo_url)
         ? escapeMapHtml(store.brand_logo_url)
         : "";
       const markerHtml = `<div class="zorvi-brand-marker" style="--brand-accent:${brand.color}">
