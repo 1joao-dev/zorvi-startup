@@ -22,8 +22,8 @@ create policy "Profiles are viewable by everyone"
 drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile"
   on public.profiles for update
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
 
 -- Cria automaticamente o perfil quando o usuário se cadastra.
 create or replace function public.handle_new_user()
@@ -43,6 +43,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
