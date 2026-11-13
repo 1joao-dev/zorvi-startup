@@ -117,7 +117,7 @@ create policy "Users can delete their own post images" on storage.objects for de
 
 
 -- Catálogo de estabelecimentos, produtos e preços verificáveis da ZORVI.
-create table if not exists public.stores (id uuid primary key default gen_random_uuid(),name text not null,category text not null check(category in ('Farmácia','Mercado','Restaurante','Lojas','Outros')),address text not null,city text not null,state text not null,postal_code text,latitude double precision check(latitude is null or latitude between -90 and 90),longitude double precision check(longitude is null or longitude between -180 and 180),website_url text,source_url text,source_label text,owner_user_id uuid references auth.users(id) on delete set null,verification_status text not null default 'pending' check(verification_status in ('pending','verified','rejected')),created_at timestamptz not null default now());
+create table if not exists public.stores (id uuid primary key default gen_random_uuid(),name text not null,category text not null check(category in ('Farmácia','Mercado','Restaurante','Lojas','Outros')),address text not null,city text not null,state text not null,postal_code text,latitude double precision check(latitude is null or latitude between -90 and 90),longitude double precision check(longitude is null or longitude between -180 and 180),website_url text,brand_name text,brand_slug text,brand_logo_url text,source_url text,source_label text,owner_user_id uuid references auth.users(id) on delete set null,verification_status text not null default 'pending' check(verification_status in ('pending','verified','rejected')),created_at timestamptz not null default now());
 create index if not exists stores_location_idx on public.stores(latitude,longitude);
 create table if not exists public.products (id uuid primary key default gen_random_uuid(),name text not null,normalized_name text not null,brand text,variant text,barcode text,category text not null check(category in ('Farmácia','Mercado','Restaurante','Lojas','Outros')),unit text,created_at timestamptz not null default now());
 create unique index if not exists products_barcode_unique_idx on public.products(barcode) where barcode is not null;
@@ -138,3 +138,5 @@ create index if not exists stores_owner_user_id_idx on public.stores(owner_user_
 create index if not exists price_observations_submitted_by_idx on public.price_observations(submitted_by);
 
 create unique index if not exists stores_name_address_city_state_unique on public.stores (lower(name), lower(address), lower(city), lower(state));
+
+create index if not exists stores_brand_slug_idx on public.stores(brand_slug);
