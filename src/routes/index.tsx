@@ -57,7 +57,7 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 }
 
-// CARTO Dark Matter is served without a client API key. Keep attribution visible.
+// OpenStreetMap raster tiles need no client API key. Keep attribution visible and respect tile usage limits.
 const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
 
