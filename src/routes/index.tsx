@@ -708,9 +708,9 @@ mapPrice: result ? Number(result.price) : null,
 
     const map = leafletMapRef.current;
     const positionedStores = mapStores.filter((store) => store.latitude !== null && store.longitude !== null);
-    if (map && !userLocation && positionedStores.length > 1) {
+    if (map && !userLocation && !selectedMapStore && positionedStores.length > 1) {
       map.fitBounds(positionedStores.map((store) => [store.latitude as number, store.longitude as number]), { padding: [28, 28], maxZoom: 14 });
-    } else if (map && !userLocation && positionedStores.length === 1) {
+    } else if (map && !userLocation && !selectedMapStore && positionedStores.length === 1) {
       map.setView([positionedStores[0].latitude as number, positionedStores[0].longitude as number], 15);
     }
     if (userLocation) {
