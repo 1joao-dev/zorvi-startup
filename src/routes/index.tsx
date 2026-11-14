@@ -157,45 +157,53 @@ function applyZorviMapPalette(map: MapLibreMap) {
     if (layerIds.has(layerId)) map.setPaintProperty(layerId, property, value);
   };
 
-  // Deep violet land, readable streets, subtle green spaces and indigo water.
-  paint("Background", "background-color", "#0A0712");
-  paint("Residential", "fill-color", "#120C1E");
-  paint("Sand", "fill-color", "#24192D");
-  paint("Grass", "fill-color", "#172B22");
-  paint("Wood", "fill-color", "#10231D");
-  paint("Water", "fill-color", "#19142F");
-  paint("Water", "fill-opacity", 0.96);
-  paint("River", "line-color", "#514080");
-  paint("River intermittent", "line-color", "#49376F");
-  paint("Transit tunnel", "line-color", "#4C3569");
-  paint("Bridge", "fill-color", "#68428F");
-  paint("Pier", "fill-color", "#38264D");
+  // ZORVI high-contrast night cartography: streets and blocks remain readable on mobile.
+  paint("Background", "background-color", "#171421");
+  paint("Residential", "fill-color", "#211B2C");
+  paint("Residential", "fill-outline-color", "#30283D");
+  paint("Sand", "fill-color", "#34283C");
+  paint("Grass", "fill-color", "#1E3A2D");
+  paint("Wood", "fill-color", "#183126");
+  paint("Water", "fill-color", "#282644");
+  paint("Water", "fill-opacity", 1);
+  paint("River", "line-color", "#7565BD");
+  paint("River", "line-opacity", 1);
+  paint("River intermittent", "line-color", "#6655A5");
+  paint("Transit tunnel", "line-color", "#A17AD0");
+  paint("Bridge", "fill-color", "#76529A");
+  paint("Pier", "fill-color", "#514064");
   paint("Road network", "line-color", [
     "match", ["get", "class"],
-    "motorway", "#A56AFF",
-    "trunk", "#8954D2",
-    "primary", "#754BB4",
-    "secondary", "#5B3B83",
-    "tertiary", "#4A3268",
-    "minor", "#3C2B53",
-    "service", "#342543",
-    "track", "#382747",
-    "#40304F",
+    "motorway", "#E0C4FF",
+    "trunk", "#C8A1FF",
+    "primary", "#B48AFF",
+    "secondary", "#9874D0",
+    "tertiary", "#80699F",
+    "minor", "#6C5A84",
+    "service", "#5B4C70",
+    "track", "#665477",
+    "#746181",
   ]);
-  paint("Road network", "line-opacity", 0.98);
-  paint("Path", "line-color", "#76529A");
-  paint("Railway", "line-color", "#73509C");
-  paint("Transit", "line-color", "#68478D");
-  paint("Aeroway", "line-color", "#4D386A");
-  paint("Building", "fill-color", "#1C1428");
-  paint("Building", "fill-outline-color", "#39254F");
-  paint("Other border", "line-color", "#5A4077");
-  paint("Disputed border", "line-color", "#8A58C0");
-  paint("Country border", "line-color", "#8052B4");
+  paint("Road network", "line-opacity", 1);
+  paint("Road network", "line-width", [
+    "interpolate", ["linear"], ["zoom"],
+    10, ["match", ["get", "class"], "motorway", 1.8, "trunk", 1.5, "primary", 1.35, "secondary", 1.15, "tertiary", 1, "minor", 0.9, "service", 0.75, 0.8],
+    16, ["match", ["get", "class"], "motorway", 5.5, "trunk", 4.8, "primary", 4.2, "secondary", 3.4, "tertiary", 2.8, "minor", 2.1, "service", 1.6, 1.8],
+  ]);
+  paint("Path", "line-color", "#927CB4");
+  paint("Path", "line-opacity", 0.95);
+  paint("Railway", "line-color", "#A17BCB");
+  paint("Transit", "line-color", "#9270BD");
+  paint("Aeroway", "line-color", "#78649A");
+  paint("Building", "fill-color", "#2A2335");
+  paint("Building", "fill-outline-color", "#493A5B");
+  paint("Other border", "line-color", "#8065A7");
+  paint("Disputed border", "line-color", "#A17BCB");
+  paint("Country border", "line-color", "#9873C3");
   for (const layerId of ["Airport labels", "Station labels", "Road labels", "Place labels", "City labels", "Country labels", "Continent labels"]) {
-    paint(layerId, "text-color", layerId === "City labels" ? "#F4E9FF" : "#D8C7ED");
-    paint(layerId, "text-halo-color", "#0A0712");
-    paint(layerId, "text-halo-width", 2);
+    paint(layerId, "text-color", layerId === "City labels" ? "#FFF7FF" : "#F0E6FC");
+    paint(layerId, "text-halo-color", "#171421");
+    paint(layerId, "text-halo-width", 2.4);
   }
 }
 

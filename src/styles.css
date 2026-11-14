@@ -110,7 +110,7 @@
 .zorvi-map-topline{height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#110c1c;color:#bba6d7;font-size:9px;font-weight:800;letter-spacing:.12em}
 .zorvi-map-topline span:last-child{font-weight:600;letter-spacing:0;color:#9e91ad}
 .zorvi-leaflet-map{height:350px;width:100%;background:#211a2b;z-index:1}
-.zorvi-map-frame .leaflet-container{font-family:inherit;background:#100b18}.zorvi-map-frame .leaflet-tile-pane{filter:invert(.88) hue-rotate(225deg) saturate(.55) brightness(.84) contrast(.92)}
+.zorvi-map-frame .leaflet-container{font-family:inherit;background:#100b18}.zorvi-map-frame .leaflet-tile-pane{filter:invert(.91) sepia(.18) hue-rotate(228deg) saturate(.85) brightness(1.18) contrast(1.14)}
 .zorvi-map-frame .leaflet-control-attribution{font-size:8px;background:#100c19eF!important;color:#d2c7df!important}.zorvi-map-frame .leaflet-control-zoom a{background:#160f22!important;color:#d8c4f4!important;border-color:#ffffff22!important}.zorvi-map-frame .leaflet-control-zoom a:hover{background:#28153c!important}
 .zorvi-map-frame .leaflet-control-attribution a{color:#c9a5ff!important}
 .zorvi-map-frame .leaflet-popup-content-wrapper,.zorvi-map-frame .leaflet-popup-tip{background:#171020;color:#fff}

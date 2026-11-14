@@ -218,53 +218,89 @@ function pickPhoton(
   } : null;
 }
 
+// Nominatim returned HTTP 403 from the Supabase Edge runtime. Remember that
+// provider block for the lifetime of the isolate and continue with Photon instead.
+let nominatimBlocked = false;
+
 async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
   const query = [store.address, store.city, store.state, "Brasil"].filter(Boolean).join(", ");
-  const nominatimUrl = new URL("https://nominatim.openstreetmap.org/search");
-  nominatimUrl.searchParams.set("format", "jsonv2");
-  nominatimUrl.searchParams.set("q", query);
-  nominatimUrl.searchParams.set("countrycodes", "br");
-  nominatimUrl.searchParams.set("addressdetails", "1");
-  nominatimUrl.searchParams.set("limit", "8");
-  nominatimUrl.searchParams.set("accept-language", "pt-BR");
+  let photonError: string | null = null;
+  let nominatimError: string | null = null;
 
-  // Nominatim's public service asks clients to stay at or below one request per second.
-  await wait(1100);
-  const nominatimResponse = await fetch(nominatimUrl, {
-    headers: {
-      "Accept": "application/json",
-      "User-Agent": "ZORVI/1.0 (https://github.com/joaosystemss/startup-em-movimento)",
-      "Referer": "https://github.com/joaosystemss/startup-em-movimento",
-    },
-    signal: AbortSignal.timeout(12000),
-  });
-  if (!nominatimResponse.ok) {
-    throw new Error("Nominatim respondeu HTTP " + nominatimResponse.status);
-  }
-  const nominatimPayload = await nominatimResponse.json();
-  const nominatimPoint = pickNominatim(
-    Array.isArray(nominatimPayload) ? nominatimPayload : [],
-    store,
-  );
-  if (nominatimPoint) return nominatimPoint;
-
-  // Photon is a second no-key OpenStreetMap geocoder when Nominatim has no street match.
+  // Photon is tried first: it is a no-key OSM geocoder and does not depend on
+  // Nominatim being available from the Edge runtime.
   const photonUrl = new URL("https://photon.komoot.io/api/");
   photonUrl.searchParams.set("q", query);
   photonUrl.searchParams.set("limit", "8");
   photonUrl.searchParams.set("lang", "pt");
-  const photonResponse = await fetch(photonUrl, {
-    headers: {
-      "Accept": "application/json",
-      "User-Agent": "ZORVI-Map/2.0 (geocodificacao de estabelecimentos)",
-    },
-    signal: AbortSignal.timeout(12000),
-  });
-  if (!photonResponse.ok) {
-    throw new Error("Photon respondeu HTTP " + photonResponse.status);
+  try {
+    await wait(1100);
+    const photonResponse = await fetch(photonUrl, {
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "ZORVI-Map/2.1 (geocodificacao de estabelecimentos)",
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!photonResponse.ok) {
+      throw new Error("HTTP " + photonResponse.status);
+    }
+    const photonPayload = await photonResponse.json();
+    const photonPoint = pickPhoton(photonPayload.features || [], store);
+    if (photonPoint) return photonPoint;
+  } catch (error) {
+    photonError = error instanceof Error ? error.message : String(error);
+    console.warn("[geocode-stores] Photon indisponível; tentando o provedor alternativo.", {
+      storeName: store.name,
+      reason: photonError,
+    });
   }
-  const photonPayload = await photonResponse.json();
-  return pickPhoton(photonPayload.features || [], store);
+
+  // Nominatim is a fallback only. Respect its public one-request-per-second policy.
+  if (!nominatimBlocked) {
+    const nominatimUrl = new URL("https://nominatim.openstreetmap.org/search");
+    nominatimUrl.searchParams.set("format", "jsonv2");
+    nominatimUrl.searchParams.set("q", query);
+    nominatimUrl.searchParams.set("countrycodes", "br");
+    nominatimUrl.searchParams.set("addressdetails", "1");
+    nominatimUrl.searchParams.set("limit", "8");
+    nominatimUrl.searchParams.set("accept-language", "pt-BR");
+    try {
+      await wait(1100);
+      const nominatimResponse = await fetch(nominatimUrl, {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "ZORVI/2.1 (https://github.com/joaosystemss/startup-em-movimento)",
+          "Referer": "https://github.com/joaosystemss/startup-em-movimento",
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (nominatimResponse.status === 403) {
+        nominatimBlocked = true;
+        throw new Error("HTTP 403; provedor bloqueou as requisições deste ambiente");
+      }
+      if (!nominatimResponse.ok) {
+        throw new Error("HTTP " + nominatimResponse.status);
+      }
+      const nominatimPayload = await nominatimResponse.json();
+      const nominatimPoint = pickNominatim(
+        Array.isArray(nominatimPayload) ? nominatimPayload : [],
+        store,
+      );
+      if (nominatimPoint) return nominatimPoint;
+    } catch (error) {
+      nominatimError = error instanceof Error ? error.message : String(error);
+      console.warn("[geocode-stores] Nominatim indisponível.", {
+        storeName: store.name,
+        reason: nominatimError,
+      });
+    }
+  }
+
+  if (photonError && nominatimError) {
+    throw new Error("Photon: " + photonError + "; Nominatim: " + nominatimError);
+  }
+  return null;
 }
 
 Deno.serve(async (request: Request) => {
