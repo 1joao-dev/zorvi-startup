@@ -19,7 +19,11 @@ type LeafletCircle = { addTo(layer:LeafletLayerGroup):LeafletCircle };
 type LeafletLayerGroup = { clearLayers():void; addTo(map:LeafletMap):LeafletLayerGroup };
 type LeafletMarker = { addTo(layer:LeafletLayerGroup):LeafletMarker; bindPopup(html:string):LeafletMarker; on(event:string,handler:()=>void):LeafletMarker };
 type LeafletTileLayer = { addTo(map:LeafletMap):LeafletTileLayer; remove():void };
-type MapLibreMap = { on(event:string,handler:(event?:unknown)=>void):MapLibreMap };
+type MapLibreMap = {
+  on(event:string,handler:(event?:unknown)=>void):MapLibreMap;
+  getStyle():{layers:Array<{id:string;type:string}>};
+  setPaintProperty(layerId:string,property:string,value:unknown):void;
+};
 type LeafletMapLibreLayer = { addTo(map:LeafletMap):LeafletMapLibreLayer; getMaplibreMap():MapLibreMap; remove():void };
 type LeafletApi = {
   map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap;
@@ -146,6 +150,55 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
+
+function applyZorviMapPalette(map: MapLibreMap) {
+  const layerIds = new Set(map.getStyle().layers.map((layer) => layer.id));
+  const paint = (layerId: string, property: string, value: unknown) => {
+    if (layerIds.has(layerId)) map.setPaintProperty(layerId, property, value);
+  };
+
+  // Deep violet land, readable streets, subtle green spaces and indigo water.
+  paint("Background", "background-color", "#0A0712");
+  paint("Residential", "fill-color", "#120C1E");
+  paint("Sand", "fill-color", "#24192D");
+  paint("Grass", "fill-color", "#172B22");
+  paint("Wood", "fill-color", "#10231D");
+  paint("Water", "fill-color", "#19142F");
+  paint("Water", "fill-opacity", 0.96);
+  paint("River", "line-color", "#514080");
+  paint("River intermittent", "line-color", "#49376F");
+  paint("Transit tunnel", "line-color", "#4C3569");
+  paint("Bridge", "fill-color", "#68428F");
+  paint("Pier", "fill-color", "#38264D");
+  paint("Road network", "line-color", [
+    "match", ["get", "class"],
+    "motorway", "#A56AFF",
+    "trunk", "#8954D2",
+    "primary", "#754BB4",
+    "secondary", "#5B3B83",
+    "tertiary", "#4A3268",
+    "minor", "#3C2B53",
+    "service", "#342543",
+    "track", "#382747",
+    "#40304F",
+  ]);
+  paint("Road network", "line-opacity", 0.98);
+  paint("Path", "line-color", "#76529A");
+  paint("Railway", "line-color", "#73509C");
+  paint("Transit", "line-color", "#68478D");
+  paint("Aeroway", "line-color", "#4D386A");
+  paint("Building", "fill-color", "#1C1428");
+  paint("Building", "fill-outline-color", "#39254F");
+  paint("Other border", "line-color", "#5A4077");
+  paint("Disputed border", "line-color", "#8A58C0");
+  paint("Country border", "line-color", "#8052B4");
+  for (const layerId of ["Airport labels", "Station labels", "Road labels", "Place labels", "City labels", "Country labels", "Continent labels"]) {
+    paint(layerId, "text-color", layerId === "City labels" ? "#F4E9FF" : "#D8C7ED");
+    paint(layerId, "text-halo-color", "#0A0712");
+    paint(layerId, "text-halo-width", 2);
+  }
+}
+
 // OpenStreetMap raster tiles remain available as a no-key fallback if vector/WebGL is unavailable.
 const MAP_FALLBACK_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const MAP_FALLBACK_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
@@ -876,7 +929,14 @@ mapPrice: result ? Number(result.price) : null,
                 setMapBaseStyle("fallback");
               }
             };
-            vectorMap.on("load", () => settleMapStyle(true));
+            vectorMap.on("load", () => {
+              try {
+                applyZorviMapPalette(vectorMap);
+              } catch (paletteError) {
+                console.warn("[ZORVI] Não foi possível aplicar toda a paleta cartográfica da marca.", paletteError);
+              }
+              settleMapStyle(true);
+            });
             // A single failed glyph/tile request must not discard an otherwise healthy vector map.
             vectorMap.on("error", (event) => {
               console.warn("[ZORVI] Erro pontual ao carregar recurso cartográfico vetorial.", event);
@@ -1105,7 +1165,7 @@ mapPrice: result ? Number(result.price) : null,
 
           <div className="zorvi-map-frame">
             <div className="zorvi-map-topline">
-              <span><i className="map-live-indicator"/> {mapBaseStyle === "vector" ? "MAPA VETORIAL" : mapBaseStyle === "fallback" ? "MAPA ALTERNATIVO" : "CARREGANDO MAPA"}</span>
+              <span><i className="map-live-indicator"/> {mapBaseStyle === "vector" ? "MAPA ZORVI" : mapBaseStyle === "fallback" ? "MAPA ALTERNATIVO" : "CARREGANDO MAPA"}</span>
               <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length === 1 ? "estabelecimento" : "estabelecimentos"}</span>
             </div>
             <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>
