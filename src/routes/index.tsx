@@ -709,9 +709,9 @@ mapPrice: result ? Number(result.price) : null,
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: searchPerformed ? [74, 58] : [42, 42],
-        iconAnchor: searchPerformed ? [37, 53] : [21, 21],
-        popupAnchor: [0, searchPerformed ? -50 : -22],
+        iconSize: searchPerformed ? [86, 66] : [42, 42],
+        iconAnchor: searchPerformed ? [43, 62] : [21, 21],
+        popupAnchor: [0, searchPerformed ? -58 : -22],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon }).addTo(markerLayer);
       const priceMarkup = hasPrice
