@@ -18,22 +18,110 @@ type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; fitB
 type LeafletCircle = { addTo(layer:LeafletLayerGroup):LeafletCircle };
 type LeafletLayerGroup = { clearLayers():void; addTo(map:LeafletMap):LeafletLayerGroup };
 type LeafletMarker = { addTo(layer:LeafletLayerGroup):LeafletMarker; bindPopup(html:string):LeafletMarker; on(event:string,handler:()=>void):LeafletMarker };
-type LeafletApi = { map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap; tileLayer(url:string,options?:Record<string,unknown>):{addTo(map:LeafletMap):void}; layerGroup():LeafletLayerGroup; divIcon(options:Record<string,unknown>):unknown; marker(coords:[number,number],options?:Record<string,unknown>):LeafletMarker; circle(coords:[number,number],options:Record<string,unknown>):LeafletCircle };
-declare global { interface Window { L?:LeafletApi } }
+type LeafletTileLayer = { addTo(map:LeafletMap):LeafletTileLayer; remove():void };
+type MapLibreMap = { on(event:string,handler:(event?:unknown)=>void):MapLibreMap };
+type LeafletMapLibreLayer = { addTo(map:LeafletMap):LeafletMapLibreLayer; getMaplibreMap():MapLibreMap; remove():void };
+type LeafletApi = {
+  map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap;
+  tileLayer(url:string,options?:Record<string,unknown>):LeafletTileLayer;
+  layerGroup():LeafletLayerGroup;
+  markerClusterGroup?(options?:Record<string,unknown>):LeafletLayerGroup;
+  maplibreGL?(options:Record<string,unknown>):LeafletMapLibreLayer;
+  divIcon(options:Record<string,unknown>):unknown;
+  marker(coords:[number,number],options?:Record<string,unknown>):LeafletMarker;
+  circle(coords:[number,number],options:Record<string,unknown>):LeafletCircle;
+};
+declare global {
+  interface Window {
+    L?:LeafletApi;
+    maplibregl?:unknown;
+    MaplibreGLLeaflet?:{maplibreGL:(options:Record<string,unknown>)=>LeafletMapLibreLayer};
+  }
+}
 let leafletLoader:Promise<LeafletApi>|null=null;
+
+function ensureStylesheet(href:string,dataAttribute:string){
+  const selector=`link[data-${dataAttribute}]`;
+  if(document.querySelector(selector))return;
+  const link=document.createElement("link");
+  link.rel="stylesheet";
+  link.href=href;
+  link.setAttribute(`data-${dataAttribute}`,"true");
+  document.head.appendChild(link);
+}
+
+function loadExternalScript(src:string,dataAttribute:string,isReady:()=>boolean):Promise<void>{
+  if(isReady())return Promise.resolve();
+  const selector=`script[data-${dataAttribute}]`;
+  const existing=document.querySelector<HTMLScriptElement>(selector);
+  if(existing?.dataset.loaded==="true"){
+    return isReady()?Promise.resolve():Promise.reject(new Error("O recurso do mapa foi carregado, mas não inicializou."));
+  }
+  return new Promise((resolve,reject)=>{
+    const script=existing||document.createElement("script");
+    script.addEventListener("load",()=>{
+      script.dataset.loaded="true";
+      if(isReady())resolve();
+      else reject(new Error("O recurso do mapa não foi inicializado corretamente."));
+    },{once:true});
+    script.addEventListener("error",()=>reject(new Error("Falha ao carregar um recurso do mapa.")),{once:true});
+    if(!existing){
+      script.src=src;
+      script.async=true;
+      script.setAttribute(`data-${dataAttribute}`,"true");
+      document.head.appendChild(script);
+    }
+  });
+}
+
 function ensureLeaflet():Promise<LeafletApi>{
   if(typeof window==="undefined")return Promise.reject(new Error("Mapa indisponível neste ambiente."));
-  if(window.L)return Promise.resolve(window.L);
   if(!leafletLoader){
-    leafletLoader=new Promise((resolve,reject)=>{
-      if(!document.querySelector('link[data-zorvi-leaflet]')){
-        const link=document.createElement("link");link.rel="stylesheet";link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";link.dataset.zorviLeaflet="true";document.head.appendChild(link);
+    leafletLoader=(async()=>{
+      ensureStylesheet("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css","zorvi-leaflet");
+      await loadExternalScript(
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+        "zorvi-leaflet",
+        ()=>Boolean(window.L),
+      );
+      const leaflet=window.L;
+      if(!leaflet)throw new Error("Não foi possível inicializar o mapa.");
+
+      // OpenFreeMap supplies a real dark vector basemap without an API key.
+      // Keep Leaflet as the interaction layer and fall back to OSM raster if WebGL/CDN fails.
+      try{
+        ensureStylesheet("https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.css","zorvi-maplibre");
+        await loadExternalScript(
+          "https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.js",
+          "zorvi-maplibre",
+          ()=>Boolean(window.maplibregl),
+        );
+        await loadExternalScript(
+          "https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js",
+          "zorvi-maplibre-leaflet",
+          ()=>Boolean(window.MaplibreGLLeaflet?.maplibreGL),
+        );
+        if(window.MaplibreGLLeaflet?.maplibreGL)leaflet.maplibreGL=window.MaplibreGLLeaflet.maplibreGL;
+      }catch(error){
+        console.warn("[ZORVI] Base vetorial indisponível; usando OpenStreetMap como alternativa.",error);
       }
-      const loaded=()=>window.L?resolve(window.L):reject(new Error("Não foi possível inicializar o mapa."));
-      const existing=document.querySelector<HTMLScriptElement>('script[data-zorvi-leaflet]');
-      if(existing){existing.addEventListener("load",loaded,{once:true});existing.addEventListener("error",()=>reject(new Error("Falha ao carregar o mapa.")),{once:true});return;}
-      const script=document.createElement("script");script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";script.async=true;script.dataset.zorviLeaflet="true";script.onload=loaded;script.onerror=()=>{script.remove();reject(new Error("Falha ao carregar o mapa."));};document.head.appendChild(script);
-    }).catch(error=>{document.querySelector('script[data-zorvi-leaflet]')?.remove();leafletLoader=null;throw error;});
+
+      // Cluster nearby businesses to keep the map readable on mobile.
+      try{
+        ensureStylesheet("https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css","zorvi-markercluster");
+        await loadExternalScript(
+          "https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js",
+          "zorvi-markercluster",
+          ()=>typeof leaflet.markerClusterGroup==="function",
+        );
+      }catch(error){
+        console.warn("[ZORVI] Agrupamento de marcadores indisponível; usando marcadores individuais.",error);
+      }
+      return leaflet;
+    })().catch(error=>{
+      leafletLoader=null;
+      throw error;
+    });
   }
   return leafletLoader;
 }
@@ -57,9 +145,10 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 }
 
-// OpenStreetMap raster tiles need no client API key. Keep attribution visible and respect tile usage limits.
-const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
+const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
+// OpenStreetMap raster tiles remain available as a no-key fallback if vector/WebGL is unavailable.
+const MAP_FALLBACK_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const MAP_FALLBACK_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
 
 const BRAZIL_STATES = [
   { code: "AC", name: "Acre" }, { code: "AL", name: "Alagoas" }, { code: "AP", name: "Amapá" }, { code: "AM", name: "Amazonas" },
@@ -738,6 +827,7 @@ mapPrice: result ? Number(result.price) : null,
   useEffect(() => {
     if (tab !== "map") return;
     let active = true;
+    let mapStyleFallbackTimer: number | undefined;
     setMapLoadError("");
     void ensureLeaflet().then((leaflet) => {
       if (!active || !mapContainerRef.current) return;
@@ -756,12 +846,56 @@ mapPrice: result ? Number(result.price) : null,
           manualLocationPickingRef.current = false;
           setManualLocationPicking(false);
         });
-        leaflet.tileLayer(MAP_TILE_URL, {
+        const fallbackTiles = leaflet.tileLayer(MAP_FALLBACK_TILE_URL, {
           maxZoom: 19,
-          attribution: MAP_TILE_ATTRIBUTION,
+          attribution: MAP_FALLBACK_ATTRIBUTION,
+          className: "zorvi-fallback-tiles",
         }).addTo(map);
+
+        if (leaflet.maplibreGL) {
+          try {
+            const vectorLayer = leaflet.maplibreGL({
+              style: MAP_STYLE_URL,
+              attributionControl: { compact: false },
+              interactive: false,
+              maxPitch: 0,
+            }).addTo(map);
+            const vectorMap = vectorLayer.getMaplibreMap();
+            let styleSettled = false;
+            const settleMapStyle = (useVector: boolean) => {
+              if (styleSettled) return;
+              styleSettled = true;
+              if (mapStyleFallbackTimer !== undefined) window.clearTimeout(mapStyleFallbackTimer);
+              if (useVector) fallbackTiles.remove();
+              else vectorLayer.remove();
+            };
+            vectorMap.on("load", () => settleMapStyle(true));
+            vectorMap.on("error", () => settleMapStyle(false));
+            mapStyleFallbackTimer = window.setTimeout(() => settleMapStyle(false), 12000);
+          } catch (error) {
+            console.warn("[ZORVI] Não foi possível ativar a base vetorial; mantendo o mapa alternativo.", error);
+          }
+        }
+
         leafletMapRef.current = map;
-        leafletMarkerLayerRef.current = leaflet.layerGroup().addTo(map);
+        const clusterOptions = {
+          maxClusterRadius: 46,
+          disableClusteringAtZoom: 16,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          chunkedLoading: true,
+          iconCreateFunction: (cluster: { getChildCount(): number }) => leaflet.divIcon({
+            className: "zorvi-marker-cluster",
+            html: `<span>${cluster.getChildCount()}</span>`,
+            iconSize: [42, 42],
+            iconAnchor: [21, 21],
+          }),
+        };
+        leafletMarkerLayerRef.current = (
+          leaflet.markerClusterGroup
+            ? leaflet.markerClusterGroup(clusterOptions)
+            : leaflet.layerGroup()
+        ).addTo(map);
       }
       setMapReady(true);
       window.setTimeout(() => leafletMapRef.current?.invalidateSize(), 120);
@@ -770,6 +904,7 @@ mapPrice: result ? Number(result.price) : null,
     });
     return () => {
       active = false;
+      if (mapStyleFallbackTimer !== undefined) window.clearTimeout(mapStyleFallbackTimer);
       leafletMapRef.current?.remove();
       leafletMapRef.current = null;
       leafletMarkerLayerRef.current = null;
@@ -827,9 +962,9 @@ mapPrice: result ? Number(result.price) : null,
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: searchPerformed ? [86, 66] : [42, 42],
-        iconAnchor: searchPerformed ? [43, 62] : [21, 21],
-        popupAnchor: [0, searchPerformed ? -58 : -22],
+        iconSize: searchPerformed ? [78, 58] : [36, 36],
+        iconAnchor: searchPerformed ? [39, 54] : [18, 18],
+        popupAnchor: [0, searchPerformed ? -50 : -20],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon, zIndexOffset: 500 }).addTo(markerLayer);
       const priceMarkup = hasPrice
@@ -855,11 +990,11 @@ mapPrice: result ? Number(result.price) : null,
       if (userLocation.accuracy !== null && userLocation.accuracy > 0) {
         leaflet.circle([userLocation.lat, userLocation.lon], {
           radius: userLocation.accuracy,
-          color: "#b77aff",
-          weight: 1.5,
-          opacity: 0.85,
-          fillColor: "#9b35ff",
-          fillOpacity: 0.13,
+          color: "#b78aff",
+          weight: 1,
+          opacity: 0.62,
+          fillColor: "#8b5cf6",
+          fillOpacity: 0.055,
           interactive: false,
         }).addTo(markerLayer);
       }
@@ -956,7 +1091,7 @@ mapPrice: result ? Number(result.price) : null,
 
           <div className="zorvi-map-frame">
             <div className="zorvi-map-topline">
-              <span><i className="map-live-indicator"/> MAPA AO VIVO</span>
+              <span><i className="map-live-indicator"/> MAPA INTERATIVO</span>
               <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length === 1 ? "estabelecimento" : "estabelecimentos"}</span>
             </div>
             <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>

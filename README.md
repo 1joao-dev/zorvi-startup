@@ -7,7 +7,7 @@ A ZORVI é uma experiência social mobile-first para descobrir pessoas, estabele
 ## Experiência atual
 
 - **Início:** feed da comunidade, publicações demonstrativas, curtidas, favoritos e criação de post.
-- **Mapa:** visualização ilustrativa de locais, filtros por categoria e pesquisa.
+- **Mapa:** base vetorial escura, geolocalização, filtros por categoria, marcadores agrupados e pesquisa de preços.
 - **ZORVI AI:** interface de chat com sugestões de perguntas e respostas de demonstração.
 - **Explorar:** categorias e atalhos para descobertas.
 - **Perfil:** perfil demonstrativo, itens salvos e alternância entre tema escuro e claro.
@@ -19,6 +19,7 @@ A ZORVI é uma experiência social mobile-first para descobrir pessoas, estabele
 - Vite
 - Tailwind CSS v4
 - Lucide React
+- Leaflet + MapLibre GL Leaflet + OpenFreeMap para o mapa vetorial.
 
 ## Desenvolvimento local
 
@@ -54,7 +55,7 @@ Nunca coloque a `service_role` key no frontend. Use somente a chave pública ano
 ## Próximas integrações
 
 1. Persistência de publicações, curtidas e comentários no Supabase.
-2. Mapbox para mapas e geolocalização, com consentimento do usuário.
+2. Ampliar a cobertura de geocodificação e a precisão das coordenadas dos estabelecimentos.
 3. Gateway seguro de IA para o chat ZORVI AI.
 4. Fontes verificadas para preços, estabelecimentos e promoções.
 

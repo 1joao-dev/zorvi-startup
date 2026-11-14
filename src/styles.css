@@ -750,3 +750,97 @@
 .theme-light .map-city-fields input,.theme-light .map-city-fields select{background:#fff;color:#261638;border-color:#e4d8ef}
 @media(max-width:370px){.map-city-fields{grid-template-columns:minmax(0,1fr) 100px}.map-city-form{padding:11px}}
 @media(prefers-reduced-motion:reduce){.zorvi-particle,.brand-mark-image{animation:none!important;transform:none!important}}
+
+
+/* ZORVI map: vector basemap, calm cartography and compact business markers. */
+.zorvi-map-frame .leaflet-tile-pane{
+  filter:none!important;
+}
+.zorvi-map-frame .leaflet-tile.zorvi-fallback-tiles{
+  filter:grayscale(.92) brightness(.76) contrast(1.08);
+}
+.zorvi-map-frame .leaflet-container{
+  background:#0b101b;
+}
+.zorvi-map-frame .maplibregl-canvas{
+  outline:none;
+}
+.zorvi-map-frame .maplibregl-ctrl-attrib{
+  background:rgba(8,6,16,.84)!important;
+  color:#b8adc8!important;
+  font-size:7px!important;
+  border-radius:8px 0 0 0;
+}
+.zorvi-map-frame .maplibregl-ctrl-attrib a{
+  color:#c8a5ff!important;
+}
+.zorvi-map-frame .zorvi-map-marker{
+  width:36px;
+  height:36px;
+  gap:2px;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price{
+  width:78px;
+  height:56px;
+}
+.zorvi-map-frame .zorvi-map-marker-symbol{
+  flex:0 0 32px;
+  width:32px;
+  height:32px;
+  border:1.5px solid rgba(255,255,255,.96);
+  box-shadow:0 3px 11px #000a,0 0 0 2px rgba(10,10,18,.72);
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-symbol{
+  flex-basis:28px;
+  width:28px;
+  height:28px;
+}
+.zorvi-map-frame .zorvi-map-marker-symbol>img{
+  padding:4px;
+}
+.zorvi-map-frame .zorvi-map-marker-category{
+  right:-4px;
+  bottom:-3px;
+  width:13px;
+  height:13px;
+  border-width:1px;
+}
+.zorvi-map-frame .zorvi-map-marker-price{
+  max-width:78px;
+  padding:4px 7px;
+  font-size:8px;
+  box-shadow:0 3px 10px #0009;
+}
+.zorvi-map-frame .zorvi-map-marker.is-selected .zorvi-map-marker-symbol{
+  transform:scale(1.09);
+  box-shadow:0 0 0 3px #ffffff2b,0 6px 15px #000c,0 0 18px color-mix(in srgb,var(--brand-accent) 58%,transparent);
+}
+.zorvi-map-frame .zorvi-marker-cluster{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  border:0!important;
+  background:transparent!important;
+}
+.zorvi-map-frame .zorvi-marker-cluster span{
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  border:1px solid #dfc8ff;
+  border-radius:50%;
+  background:linear-gradient(145deg,#a855f7,#6d28d9);
+  color:#fff;
+  font:800 12px/1 "DM Sans",sans-serif;
+  box-shadow:0 0 0 4px rgba(168,85,247,.18),0 6px 18px #000b;
+}
+.zorvi-map-frame .leaflet-control-attribution{
+  background:rgba(8,6,16,.84)!important;
+  color:#b8adc8!important;
+}
+.zorvi-map-frame .leaflet-control-attribution a{
+  color:#c8a5ff!important;
+}
+.theme-light .zorvi-map-frame .leaflet-tile-pane{
+  filter:none!important;
+}
