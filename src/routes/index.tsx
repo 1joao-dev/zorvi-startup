@@ -713,7 +713,7 @@ mapPrice: result ? Number(result.price) : null,
         iconAnchor: searchPerformed ? [43, 62] : [21, 21],
         popupAnchor: [0, searchPerformed ? -58 : -22],
       });
-      const marker = leaflet.marker([store.latitude, store.longitude], { icon }).addTo(markerLayer);
+      const marker = leaflet.marker([store.latitude, store.longitude], { icon, zIndexOffset: 500 }).addTo(markerLayer);
       const priceMarkup = hasPrice
         ? `<strong class="zorvi-popup-price">${store.mapPriceType === "estimated" ? "Estimativa · " : "Preço verificado · "}${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
         : searchPerformed ? '<strong class="zorvi-popup-no-price">Preço não confirmado</strong>' : "";
@@ -822,14 +822,14 @@ mapPrice: result ? Number(result.price) : null,
           <div className="zorvi-map-frame">
             <div className="zorvi-map-topline">
               <span><i className="map-live-indicator"/> MAPA AO VIVO</span>
-              <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length + (userLocation ? 1 : 0)} pontos</span>
+              <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length === 1 ? "estabelecimento" : "estabelecimentos"}</span>
             </div>
             <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>
             {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b><span>Carregando ruas e estabelecimentos</span></div>}
             {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
             {manualLocationPicking&&<div className="map-picking-hint">Toque no mapa para marcar sua localização</div>}
             <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={19}/></button>
-            <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
+            <div className="zorvi-map-legend"><span><i className="legend-user"/> Você</span><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
           </div>
 
           <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "") + (mapSheetExpanded ? " is-expanded" : "")} aria-label="Estabelecimentos próximos">
