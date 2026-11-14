@@ -697,3 +697,56 @@
 @media(max-width:370px){
   .zorvi-map-legend{gap:6px;padding:6px 7px;font-size:7px}
 }
+
+
+/* ZORVI ambient particles and animated brand mark */
+.app-shell{isolation:isolate}
+.main-content{position:relative;z-index:1}
+.zorvi-particle-field{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.zorvi-particle{position:absolute;left:var(--particle-x);top:var(--particle-y);width:var(--particle-size);height:var(--particle-size);border-radius:50%;background:radial-gradient(circle,#e4c8ff 0%,#a855f7 48%,transparent 75%);opacity:0;filter:drop-shadow(0 0 6px #9b35ff);animation:zorvi-particle-float var(--particle-duration) ease-in-out var(--particle-delay) infinite}
+.zorvi-particle:nth-child(1){--particle-x:7%;--particle-y:17%;--particle-size:4px;--particle-duration:13s;--particle-delay:-3s}
+.zorvi-particle:nth-child(2){--particle-x:19%;--particle-y:38%;--particle-size:3px;--particle-duration:16s;--particle-delay:-9s}
+.zorvi-particle:nth-child(3){--particle-x:31%;--particle-y:12%;--particle-size:2px;--particle-duration:12s;--particle-delay:-6s}
+.zorvi-particle:nth-child(4){--particle-x:43%;--particle-y:54%;--particle-size:4px;--particle-duration:17s;--particle-delay:-11s}
+.zorvi-particle:nth-child(5){--particle-x:57%;--particle-y:27%;--particle-size:3px;--particle-duration:14s;--particle-delay:-5s}
+.zorvi-particle:nth-child(6){--particle-x:69%;--particle-y:11%;--particle-size:2px;--particle-duration:18s;--particle-delay:-13s}
+.zorvi-particle:nth-child(7){--particle-x:82%;--particle-y:43%;--particle-size:4px;--particle-duration:15s;--particle-delay:-8s}
+.zorvi-particle:nth-child(8){--particle-x:93%;--particle-y:22%;--particle-size:3px;--particle-duration:12s;--particle-delay:-2s}
+.zorvi-particle:nth-child(9){--particle-x:12%;--particle-y:72%;--particle-size:2px;--particle-duration:19s;--particle-delay:-14s}
+.zorvi-particle:nth-child(10){--particle-x:28%;--particle-y:84%;--particle-size:3px;--particle-duration:15s;--particle-delay:-7s}
+.zorvi-particle:nth-child(11){--particle-x:49%;--particle-y:76%;--particle-size:2px;--particle-duration:13s;--particle-delay:-10s}
+.zorvi-particle:nth-child(12){--particle-x:64%;--particle-y:91%;--particle-size:4px;--particle-duration:17s;--particle-delay:-4s}
+.zorvi-particle:nth-child(13){--particle-x:78%;--particle-y:68%;--particle-size:2px;--particle-duration:14s;--particle-delay:-12s}
+.zorvi-particle:nth-child(14){--particle-x:90%;--particle-y:86%;--particle-size:3px;--particle-duration:18s;--particle-delay:-6s}
+@keyframes zorvi-particle-float{0%,100%{opacity:0;transform:translate3d(0,12px,0) scale(.65)}20%,75%{opacity:.48}50%{opacity:.22;transform:translate3d(8px,-32px,0) scale(1.1)}}
+.brand-mark-image{transform-origin:50% 50%;animation:zorvi-logo-orbit 6s ease-in-out infinite;filter:drop-shadow(0 0 7px #8b2cff88)}
+@keyframes zorvi-logo-orbit{0%,100%{transform:translateY(0) rotate(-2deg);filter:drop-shadow(0 0 5px #8b2cff66)}50%{transform:translateY(-2px) rotate(2deg);filter:drop-shadow(0 0 12px #b65cffbb)}}
+.theme-light .zorvi-particle{opacity:.35;filter:drop-shadow(0 0 5px #9b35ff66)}
+
+/* Manual city/state region picker */
+.map-city-form{display:flex;flex-direction:column;gap:10px;padding:13px;border:1px solid #a855f755;border-radius:17px;background:linear-gradient(145deg,#1a1028f5,#100b19f5);box-shadow:0 10px 28px #0003}
+.map-city-form-heading{display:flex;align-items:center;gap:9px}
+.map-city-form-heading>span{width:34px;height:34px;flex:none;display:grid;place-items:center;border:1px solid #a855f755;border-radius:11px;background:#8b35ff20;color:#d7b5ff}
+.map-city-form-heading>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.map-city-form-heading b{font-size:11px;color:#f8f4ff}
+.map-city-form-heading small{font-size:9px;line-height:1.4;color:#b7a9c8}
+.map-city-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(105px,.62fr);gap:8px}
+.map-city-fields label{display:flex;flex-direction:column;gap:5px;color:#c8b9da;font-size:9px;font-weight:750}
+.map-city-fields input,.map-city-fields select{width:100%;height:40px;min-width:0;padding:0 10px;border:1px solid #ffffff1c;border-radius:11px;outline:none;background:#0b0812;color:#f8f4ff;font-size:11px}
+.map-city-fields input:focus,.map-city-fields select:focus{border-color:#a855f7;box-shadow:0 0 0 3px #8b35ff20}
+.map-city-fields input::placeholder{color:#82778f}
+.map-city-submit{min-height:41px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #b77aff55;border-radius:12px;background:linear-gradient(105deg,#8c2bff,#6500db);color:#fff;font-size:10px;font-weight:800;box-shadow:0 7px 18px #7200ff30}
+.map-city-submit:disabled{opacity:.65;cursor:wait}
+.map-region-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 11px;border:1px solid #a855f733;border-radius:12px;background:#8b35ff12;color:var(--muted);font-size:9px}
+.map-region-summary b{color:var(--text)}
+.map-region-summary button{border:0;background:transparent;color:#c99aff;font-size:9px;font-weight:800}
+.zorvi-city-reference-icon{background:transparent;border:0}
+.zorvi-city-reference{display:flex;align-items:center;gap:6px;width:max-content;max-width:142px;padding:5px 9px 5px 6px;border:1px solid #e5caff;border-radius:999px;background:#190d2bef;color:#fff;box-shadow:0 0 0 5px #8b35ff2b,0 7px 18px #0009}
+.zorvi-city-reference i{width:10px;height:10px;flex:none;border:2px solid #fff;border-radius:50%;background:#a855f7;box-shadow:0 0 0 4px #a855f744}
+.zorvi-city-reference b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;font-weight:800}
+.theme-light .map-city-form{background:linear-gradient(145deg,#fff,#f5edff);border-color:#c7a2ee}
+.theme-light .map-city-form-heading b{color:#261638}
+.theme-light .map-city-form-heading small,.theme-light .map-city-fields label{color:#6d5c7e}
+.theme-light .map-city-fields input,.theme-light .map-city-fields select{background:#fff;color:#261638;border-color:#e4d8ef}
+@media(max-width:370px){.map-city-fields{grid-template-columns:minmax(0,1fr) 100px}.map-city-form{padding:11px}}
+@media(prefers-reduced-motion:reduce){.zorvi-particle,.brand-mark-image{animation:none!important;transform:none!important}}
