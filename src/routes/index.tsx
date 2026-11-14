@@ -152,59 +152,104 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 
 function applyZorviMapPalette(map: MapLibreMap) {
-  const layerIds = new Set(map.getStyle().layers.map((layer) => layer.id));
+  const layers = map.getStyle().layers;
+  const layerIds = new Set(layers.map((layer) => layer.id));
+  const applied: string[] = [];
+  const missing = new Set<string>();
+
+  // These IDs match the exact OpenFreeMap Dark style used by ZORVI.
+  // Each paint update is isolated so one unsupported property cannot cancel the palette.
   const paint = (layerId: string, property: string, value: unknown) => {
-    if (layerIds.has(layerId)) map.setPaintProperty(layerId, property, value);
+    if (!layerIds.has(layerId)) {
+      missing.add(layerId);
+      return;
+    }
+    try {
+      map.setPaintProperty(layerId, property, value);
+      applied.push(`${layerId}.${property}`);
+    } catch (error) {
+      console.warn(`[ZORVI] Não foi possível estilizar ${layerId}.${property}.`, error);
+    }
   };
 
-  // ZORVI high-contrast night cartography: streets and blocks remain readable on mobile.
-  paint("Background", "background-color", "#171421");
-  paint("Residential", "fill-color", "#211B2C");
-  paint("Residential", "fill-outline-color", "#30283D");
-  paint("Sand", "fill-color", "#34283C");
-  paint("Grass", "fill-color", "#1E3A2D");
-  paint("Wood", "fill-color", "#183126");
-  paint("Water", "fill-color", "#282644");
-  paint("Water", "fill-opacity", 1);
-  paint("River", "line-color", "#7565BD");
-  paint("River", "line-opacity", 1);
-  paint("River intermittent", "line-color", "#6655A5");
-  paint("Transit tunnel", "line-color", "#A17AD0");
-  paint("Bridge", "fill-color", "#76529A");
-  paint("Pier", "fill-color", "#514064");
-  paint("Road network", "line-color", [
-    "match", ["get", "class"],
-    "motorway", "#E0C4FF",
-    "trunk", "#C8A1FF",
-    "primary", "#B48AFF",
-    "secondary", "#9874D0",
-    "tertiary", "#80699F",
-    "minor", "#6C5A84",
-    "service", "#5B4C70",
-    "track", "#665477",
-    "#746181",
-  ]);
-  paint("Road network", "line-opacity", 1);
-  paint("Road network", "line-width", [
+  // Base: purple-black land, visible green spaces, water and building blocks.
+  paint("background", "background-color", "#12101A");
+  paint("water", "fill-color", "#1B3047");
+  paint("landuse_residential", "fill-color", "#211B2B");
+  paint("landuse_residential", "fill-opacity", 0.92);
+  paint("landcover_wood", "fill-color", "#1B382C");
+  paint("landcover_wood", "fill-opacity", 1);
+  paint("landuse_park", "fill-color", "#254632");
+  paint("building", "fill-color", "#2A2335");
+  paint("building", "fill-outline-color", "#493B5B");
+  paint("road_area_pier", "fill-color", "#3A2C49");
+  paint("road_pier", "line-color", "#80669F");
+  paint("waterway", "line-color", "#416E9A");
+  paint("water_name", "text-color", "#9DB9D8");
+  paint("water_name", "text-halo-color", "#12101A");
+
+  // Local streets stay quiet; main avenues have a clear visual hierarchy.
+  paint("highway_path", "line-color", "#79678E");
+  paint("highway_path", "line-opacity", 0.95);
+  paint("highway_minor", "line-color", "#685779");
+  paint("highway_minor", "line-opacity", 1);
+  paint("highway_minor", "line-width", [
     "interpolate", ["linear"], ["zoom"],
-    10, ["match", ["get", "class"], "motorway", 1.8, "trunk", 1.5, "primary", 1.35, "secondary", 1.15, "tertiary", 1, "minor", 0.9, "service", 0.75, 0.8],
-    16, ["match", ["get", "class"], "motorway", 5.5, "trunk", 4.8, "primary", 4.2, "secondary", 3.4, "tertiary", 2.8, "minor", 2.1, "service", 1.6, 1.8],
+    12, 0.8,
+    15, 1.25,
+    18, 2.4,
+    20, 3.4,
   ]);
-  paint("Path", "line-color", "#927CB4");
-  paint("Path", "line-opacity", 0.95);
-  paint("Railway", "line-color", "#A17BCB");
-  paint("Transit", "line-color", "#9270BD");
-  paint("Aeroway", "line-color", "#78649A");
-  paint("Building", "fill-color", "#2A2335");
-  paint("Building", "fill-outline-color", "#493A5B");
-  paint("Other border", "line-color", "#8065A7");
-  paint("Disputed border", "line-color", "#A17BCB");
-  paint("Country border", "line-color", "#9873C3");
-  for (const layerId of ["Airport labels", "Station labels", "Road labels", "Place labels", "City labels", "Country labels", "Continent labels"]) {
-    paint(layerId, "text-color", layerId === "City labels" ? "#FFF7FF" : "#F0E6FC");
-    paint(layerId, "text-halo-color", "#171421");
-    paint(layerId, "text-halo-width", 2.4);
+  paint("highway_major_casing", "line-color", "#9275B3");
+  paint("highway_major_casing", "line-width", [
+    "interpolate", ["linear"], ["zoom"],
+    10, 1.8,
+    15, 3.2,
+    19, 6.5,
+  ]);
+  paint("highway_major_inner", "line-color", "#49365F");
+  paint("highway_major_inner", "line-width", [
+    "interpolate", ["linear"], ["zoom"],
+    10, 1.1,
+    15, 2.1,
+    19, 4.8,
+  ]);
+  paint("highway_major_subtle", "line-color", "#705A8B");
+  paint("highway_motorway_casing", "line-color", "#B08AD8");
+  paint("highway_motorway_inner", "line-color", "#62427F");
+  paint("highway_motorway_subtle", "line-color", "#8C6AB0");
+  paint("railway_transit", "line-color", "#9A79B8");
+  paint("railway_minor", "line-color", "#806493");
+  paint("railway", "line-color", "#9A79B8");
+
+  // Street and place names stay readable over the custom dark basemap.
+  paint("highway_name_other", "text-color", "#C6B8D8");
+  paint("highway_name_other", "text-halo-color", "#171321");
+  paint("highway_name_other", "text-halo-width", 1.6);
+  paint("highway_name_motorway", "text-color", "#E0CBF5");
+  for (const layerId of [
+    "place_other",
+    "place_suburb",
+    "place_village",
+    "place_town",
+    "place_city",
+    "place_city_large",
+    "place_state",
+    "place_country_other",
+    "place_country_minor",
+    "place_country_major",
+  ]) {
+    paint(layerId, "text-color", "#E6D9F2");
+    paint(layerId, "text-halo-color", "#171321");
+    paint(layerId, "text-halo-width", 1.8);
   }
+
+  console.info("[ZORVI] Paleta cartográfica aplicada:", {
+    style: "OpenFreeMap Dark",
+    appliedPaintProperties: applied.length,
+    layersFound: layers.length,
+    missingLayers: [...missing],
+  });
 }
 
 // OpenStreetMap raster tiles remain available as a no-key fallback if vector/WebGL is unavailable.
