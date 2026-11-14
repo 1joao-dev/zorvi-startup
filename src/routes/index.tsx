@@ -11,9 +11,9 @@ type UserProfile = { id: string; username: string | null; display_name: string; 
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null };
-type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
+type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
-type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; remove():void; invalidateSize():void };
+type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; fitBounds(bounds:Array<[number,number]>,options?:Record<string,unknown>):LeafletMap; on(event:string,handler:(event:{latlng:{lat:number;lng:number}})=>void):LeafletMap; remove():void; invalidateSize():void };
 type LeafletLayerGroup = { clearLayers():void; addTo(map:LeafletMap):LeafletLayerGroup };
 type LeafletMarker = { addTo(layer:LeafletLayerGroup):LeafletMarker; bindPopup(html:string):LeafletMarker; on(event:string,handler:()=>void):LeafletMarker };
 type LeafletApi = { map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap; tileLayer(url:string,options?:Record<string,unknown>):{addTo(map:LeafletMap):void}; layerGroup():LeafletLayerGroup; divIcon(options:Record<string,unknown>):unknown; marker(coords:[number,number],options?:Record<string,unknown>):LeafletMarker };
@@ -54,6 +54,9 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
     * Math.sin(longitudeDelta / 2) ** 2;
   return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 }
+
+const MAP_TILE_URL = import.meta.env.VITE_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const MAP_TILE_ATTRIBUTION = import.meta.env.VITE_MAP_TILE_ATTRIBUTION || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> · <a href="https://www.openstreetmap.org/fixthemap">Corrigir mapa</a>';
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -150,7 +153,8 @@ function App() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todos");
   const [userLocation, setUserLocation] = useState<{lat:number;lon:number}|null>(null);
-  const [locationStatus, setLocationStatus] = useState("Ative o GPS para encontrar lojas próximas.");
+const [locationStatus, setLocationStatus] = useState("Ative o GPS para encontrar lojas próximas.");
+  const [manualLocationPicking, setManualLocationPicking] = useState(false);
   const [stores, setStores] = useState<Store[]>([]);
   const [storeError, setStoreError] = useState("");
   const [priceResults, setPriceResults] = useState<PriceResult[]>([]);
@@ -164,7 +168,8 @@ function App() {
   const [selectedMapStore, setSelectedMapStore] = useState<MapStore|null>(null);
   const mapContainerRef = useRef<HTMLDivElement|null>(null);
   const leafletMapRef = useRef<LeafletMap|null>(null);
-  const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
+const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
+  const manualLocationPickingRef = useRef(false);
   const [saved, setSaved] = useState<number[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -375,6 +380,8 @@ function App() {
     setCommentSending(false);
   };
   const requestLocation = useCallback(() => {
+    manualLocationPickingRef.current = false;
+    setManualLocationPicking(false);
     if (!navigator.geolocation) {
       setUserLocation(null);
       setLocationStatus("Este navegador não oferece localização por GPS.");
@@ -385,23 +392,27 @@ function App() {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const accuracy = Number(coords.accuracy);
-        if (!Number.isFinite(accuracy) || accuracy > 250) {
+        const latitude = Number(coords.latitude);
+        const longitude = Number(coords.longitude);
+        const validCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
+          && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+        if (!validCoordinates || !Number.isFinite(accuracy) || accuracy > 100) {
           const accuracyLabel = Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : "indefinida";
           setUserLocation(null);
-          setLocationStatus(`Localização imprecisa (${accuracyLabel}). Ative a localização precisa ou teste pelo GPS do celular.`);
+          setLocationStatus(`GPS sem precisão suficiente (${accuracyLabel}). Precisamos de precisão de até 100 m; você também pode escolher um ponto no mapa.`);
           return;
         }
-        setUserLocation({ lat: coords.latitude, lon: coords.longitude });
+        setUserLocation({ lat: latitude, lon: longitude });
         setLocationStatus(`GPS confirmado · precisão de ±${Math.round(accuracy)} m`);
       },
       (error) => {
         setUserLocation(null);
         setLocationStatus(
           error.code === error.PERMISSION_DENIED
-            ? "Permissão negada. Libere a localização nas configurações do navegador."
+            ? "Permissão negada. Libere a localização nas configurações do navegador ou escolha um ponto no mapa."
             : error.code === error.POSITION_UNAVAILABLE
-              ? "O dispositivo não conseguiu determinar sua posição. Verifique o GPS."
-              : "O GPS demorou para responder. Tente novamente em uma área aberta."
+              ? "O dispositivo não conseguiu determinar sua posição. Verifique o GPS ou escolha um ponto no mapa."
+              : "O GPS demorou para responder. Tente novamente em uma área aberta ou escolha um ponto no mapa."
         );
       },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
@@ -461,7 +472,8 @@ function App() {
       const result = bestByStore.get(store.id);
       return {
         ...store,
-        mapPrice: result ? Number(result.price) : null,
+mapPrice: result ? Number(result.price) : null,
+        mapPriceType: result?.price_type || null,
         mapPriceObservedAt: result?.observed_at || null,
         mapPriceSource: result?.source_label || null,
         mapProductLabel: result ? [result.product.name,result.product.variant].filter(Boolean).join(" · ") : null,
@@ -539,6 +551,8 @@ function App() {
         .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at),products(id,name,brand,variant,unit,category)")
         .in("product_id", productIds)
         .eq("verification_status", "verified")
+        .gte("observed_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .neq("availability_status", "unavailable")
         .order("price", { ascending: true })
         .limit(100);
       if (priceError) throw priceError;
@@ -582,12 +596,21 @@ function App() {
     void ensureLeaflet().then((leaflet) => {
       if (!active || !mapContainerRef.current) return;
       if (!leafletMapRef.current) {
-        const map = leaflet.map(mapContainerRef.current, { zoomControl: false, scrollWheelZoom: false });
+        const map = leaflet.map(mapContainerRef.current, { zoomControl: true, scrollWheelZoom: false });
         map.setView([-5.0892, -42.8016], 13);
-        leaflet.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-          maxZoom: 20,
-          subdomains: "abcd",
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        map.on("click", (event) => {
+          if (!manualLocationPickingRef.current) return;
+          const latitude = Number(event.latlng.lat);
+          const longitude = Number(event.latlng.lng);
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          setUserLocation({ lat: latitude, lon: longitude });
+          setLocationStatus("Ponto escolhido manualmente no mapa · não é uma posição GPS.");
+          manualLocationPickingRef.current = false;
+          setManualLocationPicking(false);
+        });
+        leaflet.tileLayer(MAP_TILE_URL, {
+          maxZoom: 19,
+          attribution: MAP_TILE_ATTRIBUTION,
         }).addTo(map);
         leafletMapRef.current = map;
         leafletMarkerLayerRef.current = leaflet.layerGroup().addTo(map);
@@ -628,9 +651,6 @@ function App() {
       if (store.latitude === null || store.longitude === null) return;
       const brand = getStoreBrand(store);
       const hasPrice = typeof store.mapPrice === "number";
-      const markerTitle = hasPrice
-        ? formatMapPrice(store.mapPrice as number)
-        : searchPerformed ? "Sem preço" : brand.name;
       const logoUrl = store.brand_logo_url && /^https?:\/\//i.test(store.brand_logo_url)
         ? escapeMapHtml(store.brand_logo_url)
         : "";
@@ -641,22 +661,22 @@ function App() {
           : store.category === "Restaurante"
             ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3v7a3 3 0 0 0 6 0V3M7 3v18M17 3v18M17 3c4 3 4 7 0 9"/></svg>'
             : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3zM5 10V5h14v5M8 14h8"/></svg>';
-      const markerHtml = `<div class="zorvi-map-marker" style="--brand-accent:${brand.color}">
+      const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}" style="--brand-accent:${brand.color}">
         <span class="zorvi-map-marker-symbol">${logoUrl ? `<img src="${logoUrl}" alt="" />` : `<b>${escapeMapHtml(brand.initials)}</b>`}
           <i class="zorvi-map-marker-category">${categoryGlyph}</i>
         </span>
-        <span class="zorvi-map-marker-label"><b>${escapeMapHtml(markerTitle)}</b><small>${escapeMapHtml(brand.name)}</small></span>
+        ${searchPerformed ? `<span class="zorvi-map-marker-price ${hasPrice ? "is-price" : "no-price"}">${hasPrice ? `${store.mapPriceType === "estimated" ? "≈ " : ""}${formatMapPrice(store.mapPrice as number)}` : "Sem preço"}</span>` : ""}
       </div>`;
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: [152, 48],
-        iconAnchor: [76, 24],
-        popupAnchor: [0, -25],
+        iconSize: searchPerformed ? [74, 58] : [42, 42],
+        iconAnchor: searchPerformed ? [37, 53] : [21, 21],
+        popupAnchor: [0, searchPerformed ? -50 : -22],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon }).addTo(markerLayer);
       const priceMarkup = hasPrice
-        ? `<strong class="zorvi-popup-price">${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
+        ? `<strong class="zorvi-popup-price">${store.mapPriceType === "estimated" ? "Estimativa · " : "Preço verificado · "}${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
         : searchPerformed ? '<strong class="zorvi-popup-no-price">Preço não confirmado</strong>' : "";
       const coordinateMarkup = store.coordinate_precision === "street" ? "<small>Localização aproximada na via</small>" : store.coordinate_precision === "address" ? "<small>Endereço geocodificado</small>" : "";
       const updatedMarkup = store.mapPriceObservedAt
@@ -667,6 +687,13 @@ function App() {
       marker.on("click", () => setSelectedMapStore(store));
     });
 
+    const map = leafletMapRef.current;
+    const positionedStores = mapStores.filter((store) => store.latitude !== null && store.longitude !== null);
+    if (map && !userLocation && positionedStores.length > 1) {
+      map.fitBounds(positionedStores.map((store) => [store.latitude as number, store.longitude as number]), { padding: [28, 28], maxZoom: 14 });
+    } else if (map && !userLocation && positionedStores.length === 1) {
+      map.setView([positionedStores[0].latitude as number, positionedStores[0].longitude as number], 15);
+    }
     if (userLocation) {
       const youIcon = leaflet.divIcon({
         className: "zorvi-user-location-icon",
@@ -676,7 +703,7 @@ function App() {
       });
       leaflet.marker([userLocation.lat, userLocation.lon], { icon: youIcon })
         .addTo(markerLayer)
-        .bindPopup("<b>Você está aqui</b>");
+        .bindPopup(locationStatus.startsWith("GPS confirmado") ? "<b>GPS confirmado</b>" : "<b>Ponto escolhido manualmente</b>");
     }
   }, [mapReady, mapStores, userLocation, searchPerformed, query]);
 
@@ -691,7 +718,7 @@ function App() {
       </header>
       <main className="main-content">
         {tab === "home" && <section className="screen">
-          <div className="welcome-row"><div><p className="eyebrow">SUA CIDADE, NOVAS POSSIBILIDADES</p><h1>Descubra o que<br/><span>move você.</span></h1></div><button className="location-pill" onClick={() => notify("Localização demonstrativa: Teresina, PI")}><MapPin size={14}/> Teresina, PI</button></div>
+          <div className="welcome-row"><div><p className="eyebrow">SUA CIDADE, NOVAS POSSIBILIDADES</p><h1>Descubra o que<br/><span>move você.</span></h1></div><button className="location-pill" onClick={() => { setTab("map"); if (!userLocation) requestLocation(); }}><MapPin size={14}/> {userLocation ? (locationStatus.startsWith("GPS confirmado") ? "GPS confirmado" : "Ponto selecionado") : "Definir localização"}</button></div>
           <button className="search-hero" onClick={() => setTab("search")}><Search size={18}/><span>O que você quer descobrir hoje?</span><Compass size={17}/></button>
           <div className="section-heading"><div><p className="eyebrow">PERTO DE VOCÊ</p><h2>Explore possibilidades</h2></div><button className="text-link" onClick={() => setTab("map")}>Ver mapa <ArrowRight size={15}/></button></div>
           <div className="discovery-cards"><button className="discovery-card discovery-purple" onClick={() => setTab("map")}><span className="discovery-icon"><MapPin size={19}/></span><b>Mapa inteligente</b><small>Lugares ao seu redor</small><ArrowRight className="discovery-arrow" size={17}/></button><button className="discovery-card discovery-pink" onClick={() => setTab("ai")}><span className="discovery-icon"><Sparkles size={19}/></span><b>ZORVI AI</b><small>Descubra com inteligência</small><ArrowRight className="discovery-arrow" size={17}/></button></div>
@@ -706,11 +733,11 @@ function App() {
           <div className="screen-title"><div><p className="eyebrow">COMPARE ANTES DE SAIR</p><h1>Mapa de preços</h1><p>Encontre estabelecimentos próximos e compare preços confirmados.</p></div></div>
           <div className="map-search"><Search size={18}/><input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?"/><button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}}><X size={16}/></button></div>
           <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>{catalogLoading?"Pesquisando...":"Comparar preços"} <Search size={16}/></button>
-          <div className="location-status"><span>{locationStatus}</span><button onClick={requestLocation}><LocateFixed size={15}/> Usar GPS</button></div>
+          <div className="location-status"><span>{locationStatus}</span><div className="location-actions"><button onClick={requestLocation}><LocateFixed size={15}/> Usar GPS</button><button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha outro ponto."); }}>{manualLocationPicking ? "Cancelar" : "Escolher no mapa"}</button></div></div>
           <div className="filter-row">{["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}</div>
           <div className="zorvi-map-frame">
-            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation?"GPS CONFIRMADO":"TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length===1?"ponto":"pontos"} no mapa</span></div>
-            <div ref={mapContainerRef} className="zorvi-leaflet-map" aria-label="Mapa interativo de estabelecimentos e preços"/>
+            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation ? (locationStatus.startsWith("GPS confirmado") ? "GPS CONFIRMADO" : "PONTO MANUAL") : "REFERÊNCIA: TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length===1?"ponto":"pontos"} no mapa</span></div>
+            <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>
             {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b></div>}
             {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
             <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={17}/></button>
@@ -718,9 +745,9 @@ function App() {
           </div>
           {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note"><span>{mapStores.filter(store=>store.latitude===null||store.longitude===null).length} lojas ainda aguardam coordenadas. Falhas temporárias podem ser tentadas novamente em alguns minutos.</span><button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Localizar todas"}</button></div>}
           <div className="nearby-head"><div><p className="eyebrow">{searchPerformed?"LOJAS QUE COMBINAM COM SUA BUSCA":"ESTABELECIMENTOS CADASTRADOS"}</p><h2>{mapStores.length} locais encontrados</h2></div><button className="text-link" onClick={()=>void loadNearbyStores()}>Atualizar</button></div>
-          <div className="place-list">{mapStores.map(s=>{const brand=getStoreBrand(s);return <div className="place-row" key={s.id}><span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}>{s.brand_logo_url?<img src={s.brand_logo_url} alt={brand.name}/>:brand.initials}</span><span className="place-info"><b>{s.brand_name||s.name}</b><small>{s.address} · {s.city}</small></span><span className="place-distance">{typeof s.mapPrice==="number"?formatMapPrice(s.mapPrice):searchPerformed?"Sem preço":s.distance===null?"Localização pendente":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={s.latitude!==null&&s.longitude!==null?`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`:`https://www.openstreetmap.org/search?query=${encodeURIComponent(`${s.address}, ${s.city}, ${s.state}, Brasil`)}`} target="_blank" rel="noreferrer" aria-label="Ver endereço no mapa"><ArrowRight size={16}/></a></div>;})}{storeError?<p className="empty-state">{storeError}</p>:!catalogLoading&&mapStores.length===0&&<p className="empty-state">Nenhum estabelecimento encontrado nesta categoria.</p>}</div>
-          {selectedMapStore&&<div className="map-selected-store"><button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={16}/></button><span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}>{getStoreBrand(selectedMapStore).initials}</span><div className="place-info"><b>{selectedMapStore.brand_name||selectedMapStore.name}</b><small>{selectedMapStore.address} · {selectedMapStore.city}</small>{typeof selectedMapStore.mapPrice==="number"?<strong>{formatMapPrice(selectedMapStore.mapPrice)} <small>· preço confirmado</small></strong>:searchPerformed?<small>Preço ainda não confirmado para esta unidade.</small>:null}</div>{selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}</div>}
-          {searchPerformed&&<div className="price-results"><div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO</p><h2>{priceResults.length} preços verificados</h2></div></div>{priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.source_label}</small><small>Consultado em {new Date(r.observed_at).toLocaleString("pt-BR")}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}{priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}</div>}
+          <div className="place-list">{mapStores.map(s=>{const brand=getStoreBrand(s);return <div className="place-row" key={s.id}><span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}>{s.brand_logo_url?<img src={s.brand_logo_url} alt={brand.name}/>:brand.initials}</span><span className="place-info"><b>{s.brand_name||s.name}</b><small>{s.address} · {s.city}</small></span><span className="place-distance">{typeof s.mapPrice==="number"?(s.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(s.mapPrice):searchPerformed?"Sem preço":s.distance===null?"Localização pendente":s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}</span><a href={s.latitude!==null&&s.longitude!==null?`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`:`https://www.openstreetmap.org/search?query=${encodeURIComponent(`${s.address}, ${s.city}, ${s.state}, Brasil`)}`} target="_blank" rel="noreferrer" aria-label="Ver endereço no mapa"><ArrowRight size={16}/></a></div>;})}{storeError?<p className="empty-state">{storeError}</p>:!catalogLoading&&mapStores.length===0&&<p className="empty-state">Nenhum estabelecimento encontrado nesta categoria.</p>}</div>
+          {selectedMapStore&&<div className="map-selected-store"><button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={16}/></button><span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}>{getStoreBrand(selectedMapStore).initials}</span><div className="place-info"><b>{selectedMapStore.brand_name||selectedMapStore.name}</b><small>{selectedMapStore.address} · {selectedMapStore.city}</small>{typeof selectedMapStore.mapPrice==="number"?<strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço verificado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong>:searchPerformed?<small>Preço ainda não confirmado para esta unidade.</small>:null}</div>{selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}</div>}
+          {searchPerformed&&<div className="price-results"><div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO</p><h2>{priceResults.length} ofertas válidas</h2></div></div>{priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}{priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}</div>}
           <p className="demo-note">Os preços precisam de fonte e verificação. Ainda não há integração automática com sites de farmácias.</p>
         </section>}
         {tab === "ai" && <section className="screen ai-screen">
