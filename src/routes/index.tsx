@@ -1018,12 +1018,16 @@ mapPrice: result ? Number(result.price) : null,
           spiderfyOnMaxZoom: true,
           showCoverageOnHover: false,
           chunkedLoading: true,
-          iconCreateFunction: (cluster: { getChildCount(): number }) => leaflet.divIcon({
-            className: "zorvi-marker-cluster",
-            html: `<span>${cluster.getChildCount()}</span>`,
-            iconSize: [42, 42],
-            iconAnchor: [21, 21],
-          }),
+          iconCreateFunction: (cluster: { getChildCount(): number }) => {
+            const count = cluster.getChildCount();
+            const size = count >= 100 ? 42 : count >= 10 ? 38 : 34;
+            return leaflet.divIcon({
+              className: "zorvi-marker-cluster",
+              html: `<span class="zorvi-marker-cluster-count" role="img" aria-label="${count} estabelecimentos">${count}</span>`,
+              iconSize: [size, size],
+              iconAnchor: [size / 2, size / 2],
+            });
+          },
         };
         leafletMarkerLayerRef.current = (
           leaflet.markerClusterGroup
@@ -1081,29 +1085,20 @@ mapPrice: result ? Number(result.price) : null,
       const logoUrl = store.brand_logo_url && /^https?:\/\//i.test(store.brand_logo_url)
         ? escapeMapHtml(store.brand_logo_url)
         : "";
-      const categoryGlyph = store.category === "Farmácia"
-        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
-        : store.category === "Mercado"
-          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18l-1.5 11h-15L3 9ZM5 9l2-5h10l2 5M9 13v3M15 13v3"/></svg>'
-          : store.category === "Restaurante"
-            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3v7a3 3 0 0 0 6 0V3M7 3v18M17 3v18M17 3c4 3 4 7 0 9"/></svg>'
-            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18v10H3zM5 10V5h14v5M8 14h8"/></svg>';
       const logoMarkup = logoUrl
-        ? `<img src="${logoUrl}" alt="" referrerpolicy="no-referrer" onerror="this.remove()" />`
+        ? `<img src="${logoUrl}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />`
         : "";
       const selectedClass = selectedMapStore?.id === store.id ? " is-selected" : "";
       const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}${selectedClass}" style="--brand-accent:${brand.color}">
-        <span class="zorvi-map-marker-symbol"><b>${escapeMapHtml(brand.initials)}</b>${logoMarkup}
-          <i class="zorvi-map-marker-category">${categoryGlyph}</i>
-        </span>
+        <span class="zorvi-map-marker-symbol"><b>${escapeMapHtml(brand.initials)}</b>${logoMarkup}</span>
         ${searchPerformed ? `<span class="zorvi-map-marker-price ${hasPrice ? "is-price" : "no-price"}">${hasPrice ? `${store.mapPriceType === "estimated" ? "≈ " : ""}${formatMapPrice(store.mapPrice as number)}` : "Sem preço"}</span>` : ""}
       </div>`;
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: searchPerformed ? [124, 46] : [28, 32],
-        iconAnchor: searchPerformed ? [62, 42] : [14, 30],
-        popupAnchor: [0, searchPerformed ? -42 : -27],
+        iconSize: searchPerformed ? [116, 40] : [38, 40],
+        iconAnchor: searchPerformed ? [18, 20] : [19, 38],
+        popupAnchor: [0, searchPerformed ? -22 : -35],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon, zIndexOffset: 500 }).addTo(markerLayer);
       const priceMarkup = hasPrice

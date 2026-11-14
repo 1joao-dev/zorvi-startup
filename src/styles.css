@@ -1011,3 +1011,201 @@
   padding:4px 6px;
   font-size:8px;
 }
+
+
+/* ZORVI map pins v2 — real logos first, clean silhouette, no decorative logo halo. */
+.zorvi-map-frame .zorvi-map-marker:not(.with-price){
+  position:relative;
+  box-sizing:border-box;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  width:38px;
+  min-width:38px;
+  max-width:38px;
+  height:40px;
+  padding:0;
+  gap:0;
+  overflow:visible;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price)::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:3px;
+  width:7px;
+  height:7px;
+  transform:translateX(-50%) rotate(45deg);
+  border:0;
+  border-right:1px solid #d9dce5;
+  border-bottom:1px solid #d9dce5;
+  border-radius:0 0 2px 0;
+  background:#fff;
+  box-shadow:2px 2px 3px rgba(0,0,0,.12);
+  z-index:0;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-symbol{
+  position:relative;
+  z-index:1;
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  flex:0 0 32px;
+  width:32px;
+  height:32px;
+  overflow:hidden;
+  border:1px solid #d9dce5;
+  border-radius:9px;
+  background:#fff;
+  box-shadow:0 2px 7px rgba(0,0,0,.42);
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-symbol>img{
+  position:relative;
+  z-index:1;
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+  padding:3px;
+  border:0;
+  border-radius:8px;
+  object-fit:contain;
+  background:#fff;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-symbol>b{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  display:grid;
+  place-items:center;
+  color:#4b3b5d;
+  font-size:9px;
+  font-weight:850;
+}
+.zorvi-map-frame .zorvi-map-marker.is-selected:not(.with-price) .zorvi-map-marker-symbol{
+  transform:translateY(-2px);
+  border-color:#9b5be8;
+  box-shadow:0 0 0 2px rgba(155,91,232,.28),0 4px 10px rgba(0,0,0,.45);
+}
+
+/* Price-search pins keep the same crisp logo tile and put the price in a separate label. */
+.zorvi-map-frame .zorvi-map-marker.with-price{
+  position:relative;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  width:116px;
+  min-width:116px;
+  max-width:116px;
+  height:40px;
+  padding:2px 4px 2px 2px;
+  gap:6px;
+  overflow:visible;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price::after{
+  display:none;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-symbol{
+  position:relative;
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  flex:0 0 30px;
+  width:30px;
+  height:30px;
+  overflow:hidden;
+  border:1px solid #d9dce5;
+  border-radius:8px;
+  background:#fff;
+  box-shadow:0 2px 7px rgba(0,0,0,.42);
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-symbol>img{
+  position:relative;
+  z-index:1;
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+  padding:3px;
+  border:0;
+  border-radius:7px;
+  object-fit:contain;
+  background:#fff;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-symbol>b{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  display:grid;
+  place-items:center;
+  color:#4b3b5d;
+  font-size:8px;
+  font-weight:850;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-price{
+  position:relative;
+  z-index:2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  max-width:76px;
+  min-height:23px;
+  padding:4px 7px;
+  overflow:hidden;
+  border:1px solid rgba(190,151,255,.48);
+  border-radius:8px;
+  background:rgba(17,11,27,.96);
+  color:#f6efff;
+  font-size:9px;
+  font-weight:800;
+  line-height:1;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  box-shadow:0 2px 7px rgba(0,0,0,.35);
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-price.is-price{
+  border-color:rgba(106,210,145,.65);
+  color:#c9f4d5;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-price.no-price{
+  border-color:rgba(255,255,255,.2);
+  color:#d6c9e3;
+}
+
+/* Cluster counts are the only circular map markers: compact, legible and intentional. */
+.zorvi-map-frame .zorvi-marker-cluster{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.zorvi-map-frame .zorvi-marker-cluster-count{
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  width:34px;
+  height:34px;
+  border:1.5px solid rgba(255,255,255,.94);
+  border-radius:50%;
+  background:linear-gradient(145deg,#963df0 0%,#7022ca 100%);
+  color:#fff;
+  font:800 11px/1 "DM Sans",sans-serif;
+  letter-spacing:-.2px;
+  box-shadow:0 3px 9px rgba(0,0,0,.42);
+}
+.zorvi-map-frame .zorvi-map-marker.is-selected.with-price .zorvi-map-marker-symbol{
+  border-color:#9b5be8;
+  box-shadow:0 0 0 2px rgba(155,91,232,.28),0 4px 10px rgba(0,0,0,.45);
+}
