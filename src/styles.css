@@ -1209,3 +1209,54 @@
   border-color:#9b5be8;
   box-shadow:0 0 0 2px rgba(155,91,232,.28),0 4px 10px rgba(0,0,0,.45);
 }
+
+
+/* Mix Mateus: preserve the full horizontal wordmark instead of squeezing it into a square. */
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo:not(.with-price){
+  width:64px;
+  min-width:64px;
+  max-width:64px;
+  height:40px;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo:not(.with-price) .zorvi-map-marker-symbol{
+  flex:0 0 58px;
+  width:58px;
+  height:26px;
+  border-radius:7px;
+  padding:2px;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo:not(.with-price) .zorvi-map-marker-symbol>img{
+  width:100%;
+  height:100%;
+  padding:0;
+  border-radius:4px;
+  object-fit:contain;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo:not(.with-price) .zorvi-map-marker-symbol>b{
+  font-size:8px;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo.with-price{
+  width:128px;
+  min-width:128px;
+  max-width:128px;
+  gap:5px;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo.with-price .zorvi-map-marker-symbol{
+  flex:0 0 56px;
+  width:56px;
+  height:25px;
+  padding:2px;
+  border-radius:7px;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo.with-price .zorvi-map-marker-symbol>img{
+  width:100%;
+  height:100%;
+  padding:0;
+  border-radius:4px;
+  object-fit:contain;
+}
+.zorvi-map-frame .zorvi-map-marker.is-wide-logo.with-price .zorvi-map-marker-price{
+  max-width:60px;
+  padding:4px 5px;
+  font-size:8px;
+}
