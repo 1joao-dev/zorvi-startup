@@ -58,8 +58,8 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 // CARTO Dark Matter is served without a client API key. Keep attribution visible.
-const MAP_TILE_URL = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -169,6 +169,7 @@ const [locationStatus, setLocationStatus] = useState("Ative o GPS para encontrar
   const [mapLoadError, setMapLoadError] = useState("");
   const [mapInstanceKey, setMapInstanceKey] = useState(0);
   const [selectedMapStore, setSelectedMapStore] = useState<MapStore|null>(null);
+  const [mapSheetExpanded, setMapSheetExpanded] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement|null>(null);
   const leafletMapRef = useRef<LeafletMap|null>(null);
 const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
@@ -490,6 +491,11 @@ mapPrice: result ? Number(result.price) : null,
     });
   },[nearbyStores,searchPerformed,searchProductCategory,priceResults]);
 
+  const bestMapPrice = useMemo(() => {
+    const prices = mapStores.map(store => store.mapPrice).filter((price): price is number => typeof price === "number" && Number.isFinite(price));
+    return prices.length ? Math.min(...prices) : null;
+  }, [mapStores]);
+
   const geocodeStores = useCallback(async (silent = false) => {
     if (!supabase || geocodingStores) return;
     setGeocodingStores(true);
@@ -717,7 +723,7 @@ mapPrice: result ? Number(result.price) : null,
         : "";
       const popupHtml = `<div class="zorvi-map-popup"><b>${escapeMapHtml(store.name)}</b><small>${escapeMapHtml(store.address)}, ${escapeMapHtml(store.city)}</small>${priceMarkup}${coordinateMarkup}${updatedMarkup}${store.website_url ? `<a href="${escapeMapHtml(store.website_url)}" target="_blank" rel="noreferrer">Site da loja</a>` : ""}</div>`;
       marker.bindPopup(popupHtml);
-      marker.on("click", () => setSelectedMapStore(store));
+      marker.on("click", () => { setSelectedMapStore(store); setMapSheetExpanded(true); });
     });
 
     const map = leafletMapRef.current;
@@ -815,7 +821,7 @@ mapPrice: result ? Number(result.price) : null,
 
           <div className="zorvi-map-frame">
             <div className="zorvi-map-topline">
-              <span><i className="map-live-indicator"/> MAPA INTERATIVO</span>
+              <span><i className="map-live-indicator"/> MAPA AO VIVO</span>
               <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length + (userLocation ? 1 : 0)} pontos</span>
             </div>
             <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>
@@ -826,14 +832,18 @@ mapPrice: result ? Number(result.price) : null,
             <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
           </div>
 
-          <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "")} aria-label="Estabelecimentos próximos">
-            <div className="map-sheet-handle"/>
+          <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "") + (mapSheetExpanded ? " is-expanded" : "")} aria-label="Estabelecimentos próximos">
+            <button type="button" className="map-sheet-handle" onClick={() => setMapSheetExpanded(value => !value)} aria-expanded={mapSheetExpanded} aria-label={mapSheetExpanded ? "Recolher lista de estabelecimentos" : "Expandir lista de estabelecimentos"}/>
             <div className="map-sheet-header">
               <div>
                 <p className="eyebrow">{searchPerformed ? "RESULTADOS DA BUSCA" : "AO SEU REDOR"}</p>
                 <h2>{mapStores.length} {mapStores.length === 1 ? "local próximo" : "locais próximos"}</h2>
               </div>
               <button className="map-sheet-refresh" onClick={() => void loadNearbyStores()}><RefreshCw size={14}/> Atualizar</button>
+            </div>
+            <div className="map-sheet-summary">
+              <span><b>{mapStores.length}</b> {mapStores.length === 1 ? "estabelecimento" : "estabelecimentos"}</span>
+              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter}</span>}
             </div>
 
             {selectedMapStore && <div className="map-selected-store">
@@ -843,7 +853,10 @@ mapPrice: result ? Number(result.price) : null,
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
                 {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1)+" km de você"}</small>}
               </div>
-              {selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
+              <div className="map-selected-actions">
+                {selectedMapStore.website_url && <a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
+                {selectedMapStore.latitude !== null && selectedMapStore.longitude !== null && <a href={`https://www.google.com/maps/dir/?api=1&destination=${selectedMapStore.latitude},${selectedMapStore.longitude}`} target="_blank" rel="noreferrer">Rotas</a>}
+              </div>
               <button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={15}/></button>
             </div>}
 
@@ -854,6 +867,7 @@ mapPrice: result ? Number(result.price) : null,
                 const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
                 return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
                   setSelectedMapStore(store);
+                  setMapSheetExpanded(true);
                   if(store.latitude!==null&&store.longitude!==null)leafletMapRef.current?.setView([store.latitude,store.longitude],16);
                 }}>
                   <span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}><b>{brand.initials}</b>{store.brand_logo_url&&<img src={store.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
