@@ -97,7 +97,7 @@ function ensureLeaflet():Promise<LeafletApi>{
           ()=>Boolean(window.maplibregl),
         );
         await loadExternalScript(
-          "https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.js",
+          "https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js",
           "zorvi-maplibre-leaflet",
           ()=>Boolean(window.MaplibreGLLeaflet?.maplibreGL),
         );
@@ -335,6 +335,7 @@ function App() {
   const [searchProductCategory, setSearchProductCategory] = useState<string|null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLoadError, setMapLoadError] = useState("");
+  const [mapBaseStyle, setMapBaseStyle] = useState<"loading"|"vector"|"fallback">("loading");
   const [mapInstanceKey, setMapInstanceKey] = useState(0);
   const [selectedMapStore, setSelectedMapStore] = useState<MapStore|null>(null);
   const [mapSheetExpanded, setMapSheetExpanded] = useState(false);
@@ -829,6 +830,7 @@ mapPrice: result ? Number(result.price) : null,
     let active = true;
     let mapStyleFallbackTimer: number | undefined;
     setMapLoadError("");
+    setMapBaseStyle("loading");
     void ensureLeaflet().then((leaflet) => {
       if (!active || !mapContainerRef.current) return;
       if (!leafletMapRef.current) {
@@ -863,18 +865,30 @@ mapPrice: result ? Number(result.price) : null,
             const vectorMap = vectorLayer.getMaplibreMap();
             let styleSettled = false;
             const settleMapStyle = (useVector: boolean) => {
-              if (styleSettled) return;
+              if (styleSettled || !active) return;
               styleSettled = true;
               if (mapStyleFallbackTimer !== undefined) window.clearTimeout(mapStyleFallbackTimer);
-              if (useVector) fallbackTiles.remove();
-              else vectorLayer.remove();
+              if (useVector) {
+                fallbackTiles.remove();
+                setMapBaseStyle("vector");
+              } else {
+                vectorLayer.remove();
+                setMapBaseStyle("fallback");
+              }
             };
             vectorMap.on("load", () => settleMapStyle(true));
-            vectorMap.on("error", () => settleMapStyle(false));
-            mapStyleFallbackTimer = window.setTimeout(() => settleMapStyle(false), 12000);
+            // A single failed glyph/tile request must not discard an otherwise healthy vector map.
+            vectorMap.on("error", (event) => {
+              console.warn("[ZORVI] Erro pontual ao carregar recurso cartográfico vetorial.", event);
+            });
+            mapStyleFallbackTimer = window.setTimeout(() => settleMapStyle(false), 15000);
           } catch (error) {
             console.warn("[ZORVI] Não foi possível ativar a base vetorial; mantendo o mapa alternativo.", error);
+            setMapBaseStyle("fallback");
           }
+        } else {
+          console.warn("[ZORVI] Plugin MapLibre GL Leaflet não foi carregado; usando a base alternativa.");
+          setMapBaseStyle("fallback");
         }
 
         leafletMapRef.current = map;
@@ -1091,7 +1105,7 @@ mapPrice: result ? Number(result.price) : null,
 
           <div className="zorvi-map-frame">
             <div className="zorvi-map-topline">
-              <span><i className="map-live-indicator"/> MAPA INTERATIVO</span>
+              <span><i className="map-live-indicator"/> {mapBaseStyle === "vector" ? "MAPA VETORIAL" : mapBaseStyle === "fallback" ? "MAPA ALTERNATIVO" : "CARREGANDO MAPA"}</span>
               <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length === 1 ? "estabelecimento" : "estabelecimentos"}</span>
             </div>
             <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>

@@ -844,3 +844,29 @@
 .theme-light .zorvi-map-frame .leaflet-tile-pane{
   filter:none!important;
 }
+
+
+/* MapLibre canvas must occupy the same Leaflet pane without the old raster color filter. */
+.zorvi-map-frame .leaflet-tile-pane{
+  filter:none!important;
+}
+.zorvi-map-frame .leaflet-tile.zorvi-fallback-tiles{
+  filter:grayscale(.92) brightness(.76) contrast(1.08);
+}
+.zorvi-map-frame .leaflet-maplibre-gl-layer,
+.zorvi-map-frame .maplibregl-map,
+.zorvi-map-frame .maplibregl-canvas{
+  background:#0b101b;
+}
+.zorvi-map-frame .maplibregl-canvas{
+  outline:none;
+}
+.zorvi-map-frame .maplibregl-ctrl-attrib{
+  background:rgba(8,6,16,.84)!important;
+  color:#b8adc8!important;
+  font-size:7px!important;
+  border-radius:8px 0 0 0;
+}
+.zorvi-map-frame .maplibregl-ctrl-attrib a{
+  color:#c8a5ff!important;
+}
