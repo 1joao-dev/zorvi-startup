@@ -705,7 +705,7 @@ mapPrice: result ? Number(result.price) : null,
         .addTo(markerLayer)
         .bindPopup(locationStatus.startsWith("GPS confirmado") ? "<b>GPS confirmado</b>" : "<b>Ponto escolhido manualmente</b>");
     }
-  }, [mapReady, mapStores, userLocation, searchPerformed, query]);
+  }, [mapReady, mapStores, userLocation, searchPerformed, query, locationStatus]);
 
   if (isSupabaseConfigured && authLoading) return <div className="zorvi-auth-loading"><img src="/zorvi-mark.webp" alt="ZORVI"/><span>Preparando sua experiência...</span></div>;
   if (isSupabaseConfigured && !session) return <AuthScreen />;
@@ -727,7 +727,7 @@ mapPrice: result ? Number(result.price) : null,
           {feedLoading && <p className="feed-status">Carregando publicações...</p>}
           {!feedLoading && posts.length === 0 && <div className="feed-empty"><Sparkles size={25}/><b>O feed está esperando por você.</b><span>Compartilhe a primeira descoberta da comunidade ZORVI.</span><button className="primary-button" onClick={() => setComposer(true)}>Criar publicação <Plus size={15}/></button></div>}
           {posts.map((p) => <article className="post-card" key={p.id}><div className="post-header"><div className="avatar">{p.author?.avatar_url ? <img src={p.author.avatar_url} alt=""/> : (p.author?.display_name || "Z")[0]}</div><div className="post-author"><b>{p.author?.display_name || "Explorador ZORVI"}</b><small>@{p.author?.username || "explorador"} · {new Date(p.created_at).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</small></div>{session?.user.id === p.user_id && <div className="post-menu-wrap"><button type="button" className="icon-button post-menu-trigger" aria-label="Opções da publicação" aria-expanded={postMenuId === p.id} onClick={() => setPostMenuId((current) => current === p.id ? null : p.id)}><MoreHorizontal size={19}/></button>{postMenuId === p.id && <div className="post-menu"><button type="button" className="edit-post-action" onClick={() => openEditPost(p)}><Pencil size={15}/> Editar publicação</button><button type="button" className="delete-post-action" onClick={() => { setPostMenuId(null); setPostToDelete(p); }}><Trash2 size={15}/> Excluir publicação</button></div>}</div>}</div>{p.content && <p className="post-copy">{p.content}</p>}{p.image_url && <div className="post-image-wrap"><img src={p.image_url} alt="Imagem da publicação"/><span className="post-tag">DESCOBERTA</span></div>}{p.location_name && <div className="post-place"><MapPin size={14}/> {p.location_name}</div>}<div className="post-actions"><button className={p.liked ? "action-active" : ""} onClick={() => void toggleLike(p)}><Heart size={19} fill={p.liked ? "currentColor" : "none"}/> {p.likes_count}</button><button onClick={() => void openComments(p)}><MessageCircle size={19}/> {p.comments_count}</button><button onClick={() => { void navigator.clipboard?.writeText(window.location.href + "?post=" + p.id); notify("Link da publicação copiado."); }}><Share2 size={18}/></button></div></article>)}
-          <p className="demo-note">Conteúdo demonstrativo · ofertas e locais reais serão conectados futuramente.</p>
+          <p className="demo-note">Estabelecimentos cadastrados no catálogo. Ofertas só aparecem quando há fonte e verificação.</p>
         </section>}
         {tab === "map" && <section className="screen">
           <div className="screen-title"><div><p className="eyebrow">COMPARE ANTES DE SAIR</p><h1>Mapa de preços</h1><p>Encontre estabelecimentos próximos e compare preços confirmados.</p></div></div>
