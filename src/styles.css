@@ -280,3 +280,383 @@
 }
 
 .map-results-sheet.has-selection .map-sheet-list{max-height:72px}
+
+
+/* ZORVI premium map refresh — no-key OpenStreetMap tiles and map-first hierarchy */
+.map-screen{
+  gap:12px;
+  padding-top:14px;
+}
+.map-screen-header h1{
+  font-size:30px;
+  letter-spacing:-1.25px;
+}
+.map-screen-header p:not(.eyebrow){
+  font-size:11px;
+}
+.map-refresh-button{
+  width:42px;
+  height:42px;
+  border-radius:15px;
+  background:linear-gradient(145deg,var(--surface),var(--surface2));
+}
+.map-search-row .map-search{
+  min-height:52px;
+  border-radius:16px;
+  border-color:color-mix(in srgb,var(--line) 75%,#a855f7 25%);
+  box-shadow:0 8px 24px #0002,inset 0 1px 0 #ffffff08;
+}
+.map-search-row .map-search input{
+  font-size:12px;
+}
+.map-search-row .price-search-button{
+  min-height:52px;
+  min-width:96px;
+  border-radius:15px;
+  font-size:11px;
+}
+.map-location-bar{
+  min-height:42px;
+}
+.map-location-copy b{
+  font-size:10px;
+}
+.map-location-copy small{
+  max-width:220px;
+  font-size:9px;
+}
+.map-location-actions button{
+  height:36px;
+  border-radius:13px;
+  padding:0 11px;
+  font-size:10px;
+}
+.map-filter-row{
+  gap:8px;
+  padding-bottom:2px;
+}
+.map-filter-row .filter-chip{
+  padding:9px 15px;
+  font-size:10px;
+  font-weight:650;
+  border-radius:999px;
+}
+.map-filter-row .filter-chip.selected{
+  background:linear-gradient(135deg,#8f2dff,#6200d9);
+  border-color:#b77aff;
+  color:#fff;
+  box-shadow:0 5px 16px #7200ff35;
+}
+.zorvi-map-frame{
+  min-height:360px;
+  max-height:560px;
+  flex:1 1 390px;
+  margin:0;
+  border:1px solid #a855f766;
+  border-radius:24px;
+  background:#100d18;
+  box-shadow:0 18px 44px #0005,0 0 0 1px #ffffff05 inset;
+}
+.zorvi-map-topline{
+  height:38px;
+  padding:0 15px;
+  background:linear-gradient(90deg,#171020,#100b19);
+  font-size:8px;
+  letter-spacing:.14em;
+}
+.zorvi-map-topline span:last-child{
+  padding:5px 8px;
+  border:1px solid #ffffff12;
+  border-radius:20px;
+  background:#ffffff08;
+  font-size:9px;
+}
+.zorvi-leaflet-map{
+  min-height:320px;
+  background:#171522;
+}
+.zorvi-map-frame .leaflet-container{
+  background:#171522;
+}
+.zorvi-map-frame .leaflet-tile-pane{
+  filter:invert(1) hue-rotate(180deg) saturate(.58) brightness(.82) contrast(.92)!important;
+}
+.zorvi-map-frame .leaflet-control-zoom{
+  margin-top:0!important;
+  margin-right:0!important;
+}
+.zorvi-map-frame .leaflet-control-attribution{
+  max-width:calc(100% - 12px);
+  border-radius:8px 0 0 0;
+  padding:2px 5px!important;
+  font-size:7px;
+}
+.zorvi-map-gps{
+  right:13px;
+  bottom:58px;
+  width:44px;
+  height:44px;
+  border:1px solid #c69aff55;
+  border-radius:15px;
+  background:#171020f2;
+  color:#e0caff;
+  box-shadow:0 8px 24px #0008,0 0 18px #8c24ff18;
+}
+.zorvi-map-gps:active{
+  transform:scale(.96);
+}
+.zorvi-map-legend{
+  left:12px;
+  bottom:12px;
+  gap:10px;
+  padding:8px 11px;
+  border:1px solid #ffffff22;
+  border-radius:999px;
+  background:#100b19ed;
+  box-shadow:0 8px 20px #0007;
+  font-size:8px;
+}
+.zorvi-map-marker{
+  width:42px;
+  height:42px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  gap:3px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  white-space:normal;
+}
+.zorvi-map-marker.with-price{
+  width:86px;
+  height:62px;
+  gap:4px;
+}
+.zorvi-map-marker:after{
+  display:none;
+}
+.zorvi-map-marker-symbol{
+  flex:0 0 38px;
+  width:38px;
+  height:38px;
+  border:2px solid #fff;
+  border-radius:50%;
+  background:var(--brand-accent);
+  color:#fff;
+  box-shadow:0 5px 16px #000b,0 0 0 3px color-mix(in srgb,var(--brand-accent) 24%,transparent);
+  transition:transform .18s ease,box-shadow .18s ease;
+}
+.zorvi-map-marker.with-price .zorvi-map-marker-symbol{
+  flex-basis:34px;
+  width:34px;
+  height:34px;
+}
+.zorvi-map-marker-symbol>img{
+  border-radius:50%;
+  padding:3px;
+}
+.zorvi-map-marker-category{
+  right:-5px;
+  bottom:-4px;
+  width:15px;
+  height:15px;
+  border:1.5px solid #fff;
+  background:#171020;
+}
+.zorvi-map-marker-price{
+  max-width:86px;
+  padding:4px 8px;
+  border:1px solid #ffffff30;
+  border-radius:999px;
+  background:#100b19f5;
+  color:#f8f4ff;
+  font-size:9px;
+  font-weight:800;
+  line-height:1.1;
+  box-shadow:0 4px 12px #0009;
+}
+.zorvi-map-marker-price.is-price{
+  color:#c4f7d1;
+  border-color:#4ba66a88;
+}
+.zorvi-map-marker-price.no-price{
+  color:#e9d3a6;
+}
+.zorvi-map-marker.is-selected .zorvi-map-marker-symbol{
+  transform:translateY(-3px) scale(1.13);
+  box-shadow:0 0 0 4px #ffffff30,0 8px 20px #000c,0 0 24px color-mix(in srgb,var(--brand-accent) 75%,transparent);
+}
+.map-results-sheet{
+  position:relative;
+  z-index:6;
+  margin:-27px 5px 0;
+  max-height:258px;
+  padding:10px 13px 12px;
+  border:1px solid #a855f766;
+  border-radius:23px;
+  background:linear-gradient(150deg,#171020f7,#100b19fa 75%);
+  box-shadow:0 18px 42px #0008,0 0 0 1px #ffffff05 inset;
+  backdrop-filter:blur(22px);
+  transition:max-height .24s ease,transform .24s ease;
+}
+.map-sheet-handle{
+  display:block;
+  width:42px;
+  height:5px;
+  margin:0 auto 11px;
+  padding:0;
+  border:0;
+  border-radius:999px;
+  background:#ffffff42;
+  cursor:pointer;
+}
+.map-sheet-handle:after{
+  content:"";
+  display:block;
+  width:100%;
+  height:15px;
+  transform:translateY(-5px);
+}
+.map-sheet-header{
+  margin-bottom:7px;
+}
+.map-sheet-header h2{
+  font-size:16px;
+}
+.map-sheet-refresh{
+  min-height:34px;
+  padding:0 10px;
+  border-radius:11px;
+  font-size:9px;
+}
+.map-sheet-summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 1px 9px;
+  border-bottom:1px solid #ffffff12;
+  color:#b9adc9;
+  font-size:9px;
+}
+.map-sheet-summary span{
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+.map-sheet-summary b{
+  color:#f4edff;
+  font-weight:800;
+}
+.map-sheet-summary span:last-child b{
+  color:#c9a0ff;
+}
+.map-sheet-list{
+  max-height:112px;
+  padding-bottom:2px;
+}
+.map-results-sheet.is-expanded{
+  max-height:min(54dvh,470px);
+}
+.map-results-sheet.is-expanded .map-sheet-list{
+  max-height:min(34dvh,310px);
+}
+.map-store-row{
+  min-height:57px;
+  gap:10px;
+  padding:9px 2px;
+}
+.map-store-row .store-brand-mini{
+  width:39px;
+  height:39px;
+  flex-basis:39px;
+  border-radius:13px;
+  box-shadow:0 4px 12px #0004;
+}
+.map-store-row .place-info b{
+  font-size:11px;
+}
+.map-store-row .place-info small{
+  font-size:9px;
+}
+.map-store-metric{
+  font-size:10px;
+  color:#d4b5ff;
+}
+.map-selected-store{
+  padding:10px 78px 10px 10px;
+  border:1px solid #a855f755;
+  border-radius:15px;
+  background:linear-gradient(120deg,#2b1740,#171020);
+}
+.map-selected-store .place-info b{
+  font-size:11px;
+}
+.map-selected-store .place-info small{
+  font-size:9px;
+}
+.map-selected-store .place-info strong{
+  font-size:13px;
+}
+.map-selected-actions{
+  position:absolute;
+  right:31px;
+  top:10px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:6px;
+}
+.map-selected-actions a{
+  padding:5px 8px;
+  border:1px solid #a855f755;
+  border-radius:9px;
+  background:#241438;
+  color:#d9bdff;
+  font-size:9px;
+  font-weight:750;
+  text-decoration:none;
+}
+.map-selected-close{
+  right:6px;
+  top:6px;
+}
+.map-coordinate-note{
+  font-size:9px;
+}
+.zorvi-map-overlay{
+  background:#100b19d9;
+}
+.theme-light .zorvi-map-frame .leaflet-tile-pane{
+  filter:grayscale(.1) brightness(1.03) saturate(.85)!important;
+}
+.theme-light .map-results-sheet{
+  border-color:#c6a1ed;
+  background:linear-gradient(150deg,#fffF,#f8f3ffF5);
+}
+.theme-light .map-sheet-summary{
+  border-color:#26113b16;
+}
+.theme-light .map-sheet-summary b{
+  color:#27183a;
+}
+.theme-light .map-selected-store{
+  background:linear-gradient(120deg,#f1e5ff,#fff);
+}
+@media(max-width:420px){
+  .zorvi-map-frame{min-height:350px}
+  .zorvi-leaflet-map{min-height:310px}
+  .map-results-sheet{margin-left:3px;margin-right:3px}
+}
+@media(max-height:740px) and (max-width:600px){
+  .zorvi-map-frame{min-height:300px;flex-basis:320px}
+  .zorvi-leaflet-map{min-height:265px}
+  .map-results-sheet.is-expanded{max-height:48dvh}
+}
+@media(prefers-reduced-motion:reduce){
+  .map-results-sheet,.zorvi-map-marker-symbol{transition:none}
+}
