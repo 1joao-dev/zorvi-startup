@@ -135,9 +135,10 @@ function pickNominatim(
       address.road || address.pedestrian || address.residential || address.footway
       || address.path || address.cycleway || "",
     ));
-    const streetMatches = resultStreet.length > 3
-      ? resultStreet.includes(street) || street.includes(resultStreet)
-      : normalize(display).includes(street);
+    const normalizedDisplay = normalize(display);
+    const streetMatches = (resultStreet.length > 3
+      && (resultStreet.includes(street) || street.includes(resultStreet)))
+      || normalizedDisplay.includes(street);
     const resultNumber = normalize(String(address.house_number || ""));
     const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
     const numberMatches = Boolean(number && resultNumber && number === resultNumber);
@@ -178,9 +179,10 @@ function pickPhoton(
     const properties = feature.properties || {};
     const display = String(properties.label || properties.name || "");
     const resultStreet = normalize(String(properties.street || properties.name || ""));
-    const streetMatches = resultStreet.length > 3
-      ? resultStreet.includes(street) || street.includes(resultStreet)
-      : normalize(display).includes(street);
+    const normalizedDisplay = normalize(display);
+    const streetMatches = (resultStreet.length > 3
+      && (resultStreet.includes(street) || street.includes(resultStreet)))
+      || normalizedDisplay.includes(street);
     const resultNumber = normalize(String(properties.housenumber || ""));
     const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
     const numberMatches = Boolean(number && resultNumber && number === resultNumber);
