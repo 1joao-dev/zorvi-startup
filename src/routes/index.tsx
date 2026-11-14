@@ -448,6 +448,7 @@ function App() {
   const mapContainerRef = useRef<HTMLDivElement|null>(null);
   const leafletMapRef = useRef<LeafletMap|null>(null);
 const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
+const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
   const manualLocationPickingRef = useRef(false);
   const autoGeocodeStartedRef = useRef(false);
   const [saved, setSaved] = useState<number[]>([]);
@@ -1023,6 +1024,8 @@ mapPrice: result ? Number(result.price) : null,
             ? leaflet.markerClusterGroup(clusterOptions)
             : leaflet.layerGroup()
         ).addTo(map);
+        // Keep the user's GPS/city marker out of the business cluster.
+        leafletUserLocationLayerRef.current = leaflet.layerGroup().addTo(map);
       }
       setMapReady(true);
       window.setTimeout(() => leafletMapRef.current?.invalidateSize(), 120);
@@ -1035,6 +1038,7 @@ mapPrice: result ? Number(result.price) : null,
       leafletMapRef.current?.remove();
       leafletMapRef.current = null;
       leafletMarkerLayerRef.current = null;
+      leafletUserLocationLayerRef.current = null;
       setMapReady(false);
       setSelectedMapStore(null);
     };
@@ -1059,8 +1063,10 @@ mapPrice: result ? Number(result.price) : null,
   useEffect(() => {
     const leaflet = window.L;
     const markerLayer = leafletMarkerLayerRef.current;
-    if (!mapReady || !leaflet || !markerLayer) return;
+    const userLocationLayer = leafletUserLocationLayerRef.current;
+    if (!mapReady || !leaflet || !markerLayer || !userLocationLayer) return;
     markerLayer.clearLayers();
+    userLocationLayer.clearLayers();
 
     mapStores.forEach((store) => {
       if (store.latitude === null || store.longitude === null) return;
@@ -1089,9 +1095,9 @@ mapPrice: result ? Number(result.price) : null,
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: searchPerformed ? [78, 58] : [36, 36],
-        iconAnchor: searchPerformed ? [39, 54] : [18, 18],
-        popupAnchor: [0, searchPerformed ? -50 : -20],
+        iconSize: searchPerformed ? [124, 46] : [28, 32],
+        iconAnchor: searchPerformed ? [62, 42] : [14, 30],
+        popupAnchor: [0, searchPerformed ? -42 : -27],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon, zIndexOffset: 500 }).addTo(markerLayer);
       const priceMarkup = hasPrice
@@ -1123,7 +1129,7 @@ mapPrice: result ? Number(result.price) : null,
           fillColor: "#8b5cf6",
           fillOpacity: 0.055,
           interactive: false,
-        }).addTo(markerLayer);
+        }).addTo(userLocationLayer);
       }
       const isCityReference = userLocation.precision === "city";
       const youIcon = leaflet.divIcon({
@@ -1135,7 +1141,7 @@ mapPrice: result ? Number(result.price) : null,
         iconAnchor: isCityReference ? [71, 21] : [12, 12],
       });
       leaflet.marker([userLocation.lat, userLocation.lon], { icon: youIcon })
-        .addTo(markerLayer)
+        .addTo(userLocationLayer)
         .bindPopup(isCityReference
           ? '<b>Centro aproximado de ' + escapeMapHtml(selectedCity) + '</b><small>' + escapeMapHtml(BRAZIL_STATE_NAMES[selectedState] || selectedState) + '</small>'
           : userLocation.precision === "precise" ? "<b>GPS confirmado</b>" : userLocation.precision === "approximate" ? '<b>GPS aproximado</b><small>Margem de erro: ±' + Math.round(userLocation.accuracy || 0) + ' m</small>' : "<b>Ponto escolhido manualmente</b>");

@@ -916,3 +916,98 @@
   background:#b66cff;
   box-shadow:0 0 0 5px rgba(166,93,255,.32),0 0 14px rgba(166,93,255,.9);
 }
+
+
+/* Compact business pins: keep the map readable even when stores are close. */
+.zorvi-map-frame .zorvi-map-marker:not(.with-price){
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  width:26px;
+  min-width:26px;
+  max-width:26px;
+  height:26px;
+  padding:2px;
+  gap:0;
+  border:1px solid rgba(225,204,255,.9);
+  border-radius:50%;
+  background:rgba(17,10,28,.96);
+  box-shadow:0 0 0 3px rgba(143,75,230,.16),0 3px 9px rgba(0,0,0,.6);
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price):after{
+  left:9px;
+  bottom:-4px;
+  width:6px;
+  height:6px;
+  background:#170e24;
+  border-right:1px solid rgba(225,204,255,.9);
+  border-bottom:1px solid rgba(225,204,255,.9);
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-symbol{
+  box-sizing:border-box;
+  flex:0 0 22px;
+  width:22px;
+  height:22px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.9);
+  border-radius:50%;
+  box-shadow:none;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-symbol>img{
+  box-sizing:border-box;
+  display:block;
+  width:100%;
+  height:100%;
+  padding:2px;
+  border-radius:50%;
+  object-fit:contain;
+  background:#fff;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-symbol>b{
+  font-size:8px;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-category{
+  right:-3px;
+  bottom:-3px;
+  width:10px;
+  height:10px;
+  border-width:1px;
+}
+.zorvi-map-frame .zorvi-map-marker:not(.with-price) .zorvi-map-marker-category svg{
+  width:6px;
+  height:6px;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price{
+  gap:5px;
+  max-width:124px;
+  padding:3px 7px 3px 3px;
+  border-radius:12px;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-symbol{
+  box-sizing:border-box;
+  flex:0 0 26px;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  overflow:hidden;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-symbol>img{
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+  padding:2px;
+  border-radius:50%;
+  object-fit:contain;
+  background:#fff;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-category{
+  width:11px;
+  height:11px;
+  right:-3px;
+  bottom:-3px;
+}
+.zorvi-map-frame .zorvi-map-marker.with-price .zorvi-map-marker-price{
+  max-width:76px;
+  padding:4px 6px;
+  font-size:8px;
+}

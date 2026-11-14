@@ -90,9 +90,21 @@ function normalizeState(value: string): string {
 
 function addressParts(address: string) {
   const firstPart = address.split(",")[0] || address;
-  const street = normalize(firstPart);
+  const streetQuery = firstPart.trim()
+    .replace(/^av\.?\s+/i, "Avenida ")
+    .replace(/^r\.?\s+/i, "Rua ")
+    .replace(/^rod\.?\s+/i, "Rodovia ")
+    .replace(/^al\.?\s+/i, "Alameda ")
+    .replace(/^tv\.?\s+/i, "Travessa ")
+    .replace(/^dep\.?\s+/i, "Deputado ")
+    .replace(/^sen\.?\s+/i, "Senador ")
+    .replace(/^des\.?\s+/i, "Desembargador ")
+    .replace(/^dr\.?\s+/i, "Doutor ")
+    .replace(/^dra\.?\s+/i, "Doutora ");
+  const street = normalize(streetQuery);
   const number = address.match(/,\s*(\d{1,6}[a-z]?)(?:\s|$|-)/i)?.[1]?.toLowerCase() || null;
-  return { street, number };
+  const district = address.split("-").slice(1).join("-").trim();
+  return { street, streetQuery, number, district };
 }
 
 function locationMatches(
@@ -121,53 +133,6 @@ function locationMatches(
 function isValidPoint(latitude: number, longitude: number): boolean {
   return Number.isFinite(latitude) && Number.isFinite(longitude)
     && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
-}
-
-function pickNominatim(
-  results: Array<Record<string, unknown>>,
-  store: StoreRow,
-): GeoPoint | null {
-  const { street, number } = addressParts(store.address);
-  const candidates = results.map((result) => {
-    const address = (result.address || {}) as Record<string, unknown>;
-    const display = String(result.display_name || "");
-    const resultStreet = normalize(String(
-      address.road || address.pedestrian || address.residential || address.footway
-      || address.path || address.cycleway || "",
-    ));
-    const normalizedDisplay = normalize(display);
-    const streetMatches = (resultStreet.length > 3
-      && (resultStreet.includes(street) || street.includes(resultStreet)))
-      || normalizedDisplay.includes(street);
-    const resultNumber = normalize(String(address.house_number || ""));
-    const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
-    const numberMatches = Boolean(number && resultNumber && number === resultNumber);
-    const locationOk = locationMatches(
-      store,
-      String(address.city || address.municipality || address.town || address.village || address.county || ""),
-      String(address.state || ""),
-      String(address.country || ""),
-      display,
-    );
-    const latitude = Number(result.lat);
-    const longitude = Number(result.lon);
-    const valid = isValidPoint(latitude, longitude);
-    return {
-      latitude,
-      longitude,
-      valid: valid && streetMatches && !numberConflict && locationOk,
-      score: (streetMatches ? 6 : 0) + (locationOk ? 4 : 0) + (numberMatches ? 8 : 0),
-      precision: numberMatches ? "address" as const : "street" as const,
-    };
-  }).filter((candidate) => candidate.valid).sort((a, b) => b.score - a.score);
-
-  const chosen = candidates[0];
-  return chosen ? {
-    latitude: chosen.latitude,
-    longitude: chosen.longitude,
-    precision: chosen.precision,
-    source: "Nominatim / OpenStreetMap",
-  } : null;
 }
 
 function pickPhoton(
@@ -218,91 +183,167 @@ function pickPhoton(
   } : null;
 }
 
-// Nominatim returned HTTP 403 from the Supabase Edge runtime. Remember that
-// provider block for the lifetime of the isolate and continue with Photon instead.
-let nominatimBlocked = false;
+function pickGoogle(
+  results: Array<Record<string, unknown>>,
+  store: StoreRow,
+): GeoPoint | null {
+  const { street, number } = addressParts(store.address);
+  const candidates = results.map((result) => {
+    const components = Array.isArray(result.address_components)
+      ? result.address_components as Array<{ long_name?: string; short_name?: string; types?: string[] }>
+      : [];
+    const component = (type: string, short = false) => {
+      const found = components.find((item) => item.types?.includes(type));
+      return String(short ? found?.short_name || "" : found?.long_name || "");
+    };
+    const formatted = String(result.formatted_address || "");
+    const route = normalize(component("route"));
+    const streetMatches = (route.length > 3 && (route.includes(street) || street.includes(route)))
+      || normalize(formatted).includes(street);
+    const resultNumber = normalize(component("street_number"));
+    const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
+    const numberMatches = Boolean(number && resultNumber && number === resultNumber);
+    const city = component("locality") || component("postal_town")
+      || component("administrative_area_level_2") || "";
+    const state = component("administrative_area_level_1", true)
+      || component("administrative_area_level_1") || "";
+    const country = component("country", true) || component("country");
+    const locationOk = locationMatches(store, city, state, country, formatted);
+    const geometry = (result.geometry || {}) as Record<string, unknown>;
+    const location = (geometry.location || {}) as Record<string, unknown>;
+    const latitude = Number(location.lat);
+    const longitude = Number(location.lng);
+    const valid = isValidPoint(latitude, longitude) && streetMatches && !numberConflict && locationOk;
+    const locationType = String(geometry.location_type || "");
+    return {
+      latitude,
+      longitude,
+      valid,
+      score: (streetMatches ? 6 : 0) + (locationOk ? 4 : 0) + (numberMatches ? 8 : 0)
+        + (locationType === "ROOFTOP" ? 3 : locationType === "RANGE_INTERPOLATED" ? 2 : 0),
+      precision: numberMatches && locationType === "ROOFTOP" ? "address" as const : "street" as const,
+    };
+  }).filter((candidate) => candidate.valid).sort((a, b) => b.score - a.score);
 
-async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
-  const query = [store.address, store.city, store.state, "Brasil"].filter(Boolean).join(", ");
-  let photonError: string | null = null;
-  let nominatimError: string | null = null;
-
-  // Photon is tried first: it is a no-key OSM geocoder and does not depend on
-  // Nominatim being available from the Edge runtime.
-  const photonUrl = new URL("https://photon.komoot.io/api/");
-  photonUrl.searchParams.set("q", query);
-  photonUrl.searchParams.set("limit", "8");
-  photonUrl.searchParams.set("lang", "pt");
-  try {
-    await wait(1100);
-    const photonResponse = await fetch(photonUrl, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "ZORVI-Map/2.1 (geocodificacao de estabelecimentos)",
-      },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!photonResponse.ok) {
-      throw new Error("HTTP " + photonResponse.status);
-    }
-    const photonPayload = await photonResponse.json();
-    const photonPoint = pickPhoton(photonPayload.features || [], store);
-    if (photonPoint) return photonPoint;
-  } catch (error) {
-    photonError = error instanceof Error ? error.message : String(error);
-    console.warn("[geocode-stores] Photon indisponível; tentando o provedor alternativo.", {
-      storeName: store.name,
-      reason: photonError,
-    });
-  }
-
-  // Nominatim is a fallback only. Respect its public one-request-per-second policy.
-  if (!nominatimBlocked) {
-    const nominatimUrl = new URL("https://nominatim.openstreetmap.org/search");
-    nominatimUrl.searchParams.set("format", "jsonv2");
-    nominatimUrl.searchParams.set("q", query);
-    nominatimUrl.searchParams.set("countrycodes", "br");
-    nominatimUrl.searchParams.set("addressdetails", "1");
-    nominatimUrl.searchParams.set("limit", "8");
-    nominatimUrl.searchParams.set("accept-language", "pt-BR");
-    try {
-      await wait(1100);
-      const nominatimResponse = await fetch(nominatimUrl, {
-        headers: {
-          "Accept": "application/json",
-          "User-Agent": "ZORVI/2.1 (https://github.com/joaosystemss/startup-em-movimento)",
-          "Referer": "https://github.com/joaosystemss/startup-em-movimento",
-        },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (nominatimResponse.status === 403) {
-        nominatimBlocked = true;
-        throw new Error("HTTP 403; provedor bloqueou as requisições deste ambiente");
-      }
-      if (!nominatimResponse.ok) {
-        throw new Error("HTTP " + nominatimResponse.status);
-      }
-      const nominatimPayload = await nominatimResponse.json();
-      const nominatimPoint = pickNominatim(
-        Array.isArray(nominatimPayload) ? nominatimPayload : [],
-        store,
-      );
-      if (nominatimPoint) return nominatimPoint;
-    } catch (error) {
-      nominatimError = error instanceof Error ? error.message : String(error);
-      console.warn("[geocode-stores] Nominatim indisponível.", {
-        storeName: store.name,
-        reason: nominatimError,
-      });
-    }
-  }
-
-  if (photonError && nominatimError) {
-    throw new Error("Photon: " + photonError + "; Nominatim: " + nominatimError);
-  }
-  return null;
+  const chosen = candidates[0];
+  return chosen ? {
+    latitude: chosen.latitude,
+    longitude: chosen.longitude,
+    precision: chosen.precision,
+    source: "Google Maps Geocoding API",
+  } : null;
 }
 
+async function geocodeWithGoogle(store: StoreRow, apiKey: string): Promise<GeoPoint | null> {
+  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  const state = STATE_NAMES[normalize(store.state)] || store.state;
+  url.searchParams.set("address", [store.address, store.city, state, "Brasil"].filter(Boolean).join(", "));
+  url.searchParams.set("components", "country:BR");
+  url.searchParams.set("region", "br");
+  url.searchParams.set("language", "pt-BR");
+  url.searchParams.set("key", apiKey);
+
+  const response = await fetch(url, {
+    headers: { "Accept": "application/json" },
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) throw new Error("Google Geocoding HTTP " + response.status);
+  const payload = await response.json();
+  if (payload.status === "ZERO_RESULTS") return null;
+  if (payload.status !== "OK") {
+    throw new Error("Google Geocoding: " + String(payload.status || "resposta inválida")
+      + (payload.error_message ? " — " + String(payload.error_message) : ""));
+  }
+  return pickGoogle(Array.isArray(payload.results) ? payload.results : [], store);
+}
+
+async function fetchPhotonFeatures(url: URL, label: string) {
+  const response = await fetch(url, {
+    headers: {
+      "Accept": "application/json",
+      "User-Agent": "ZORVI-Map/2.2 (geocodificacao de estabelecimentos)",
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).slice(0, 180);
+    throw new Error(label + " HTTP " + response.status + (detail ? ": " + detail : ""));
+  }
+  const payload = await response.json();
+  return Array.isArray(payload.features) ? payload.features : [];
+}
+
+async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
+  const { streetQuery, number, district } = addressParts(store.address);
+  const state = STATE_NAMES[normalize(store.state)] || store.state;
+  const query = [store.address, store.city, state, "Brasil"].filter(Boolean).join(", ");
+  const errors: string[] = [];
+
+  // Google Maps is optional and runs only when its key is stored securely in Supabase.
+  const googleKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  if (googleKey) {
+    try {
+      const googlePoint = await geocodeWithGoogle(store, googleKey);
+      if (googlePoint) return googlePoint;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      errors.push("Google Maps: " + reason);
+      console.warn("[geocode-stores] Google Maps não localizou o endereço; tentando OpenStreetMap.", {
+        storeName: store.name,
+        reason,
+      });
+    }
+  }
+
+  // Structured search is more precise for addresses that already include street and number.
+  const structuredUrl = new URL("https://photon.komoot.io/structured");
+  structuredUrl.searchParams.set("street", streetQuery);
+  if (number) structuredUrl.searchParams.set("housenumber", number);
+  if (district) structuredUrl.searchParams.set("district", district);
+  structuredUrl.searchParams.set("city", store.city);
+  structuredUrl.searchParams.set("state", state);
+  structuredUrl.searchParams.set("countrycode", "br");
+  structuredUrl.searchParams.set("limit", "8");
+  structuredUrl.searchParams.set("lang", "pt");
+
+  try {
+    await wait(1100);
+    const features = await fetchPhotonFeatures(structuredUrl, "Photon /structured");
+    const point = pickPhoton(features, store);
+    if (point) return point;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    errors.push(reason);
+    console.warn("[geocode-stores] Photon estruturado falhou; tentando busca textual.", {
+      storeName: store.name,
+      reason,
+    });
+  }
+
+  // Photon forward search uses /api (without a trailing slash); /api/ returned HTTP 400.
+  const textUrl = new URL("https://photon.komoot.io/api");
+  textUrl.searchParams.set("q", query);
+  textUrl.searchParams.set("countrycode", "br");
+  textUrl.searchParams.set("limit", "8");
+  textUrl.searchParams.set("lang", "pt");
+
+  try {
+    await wait(1100);
+    const features = await fetchPhotonFeatures(textUrl, "Photon /api");
+    const point = pickPhoton(features, store);
+    if (point) return point;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    errors.push(reason);
+    console.warn("[geocode-stores] Photon textual falhou.", {
+      storeName: store.name,
+      reason,
+    });
+  }
+
+  if (errors.length) throw new Error(errors.join("; "));
+  return null;
+}
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
