@@ -928,19 +928,28 @@ mapPrice: result ? Number(result.price) : null,
           </div>
 
           <div className="map-location-bar">
-            <div className={"map-location-indicator" + (userLocation ? " is-active" : "")} title={locationStatus}>
+            <div className={"map-location-indicator" + (userLocation || selectedCity ? " is-active" : "")} title={locationStatus}>
               <span className="map-location-indicator-dot"/>
               <span className="map-location-copy">
-                <b>{userLocation ? userLocation.precision === "precise" ? "GPS confirmado" : userLocation.precision === "approximate" ? "GPS aproximado" : "Ponto manual" : locationStatus.startsWith("Buscando") ? "Buscando GPS" : "Localização"}</b>
-                <small>{userLocation ? userLocation.precision === "manual" ? "Ponto escolhido no mapa" : "Precisão de ±" + Math.round(userLocation.accuracy || 0) + " m" : locationStatus}</small>
+                <b>{selectedCity ? "Região selecionada" : userLocation ? userLocation.precision === "precise" ? "GPS confirmado" : userLocation.precision === "approximate" ? "GPS aproximado" : "Ponto manual" : locationStatus.startsWith("Buscando") ? "Buscando GPS" : "Defina sua região"}</b>
+                <small>{selectedCity ? selectedCity + ", " + (BRAZIL_STATE_NAMES[selectedState] || selectedState) + " · centro urbano aproximado" : userLocation ? userLocation.precision === "manual" ? "Ponto escolhido no mapa" : "Precisão de ±" + Math.round(userLocation.accuracy || 0) + " m" : locationStatus}</small>
               </span>
             </div>
             <div className="map-location-actions">
               <button onClick={requestLocation}><LocateFixed size={15}/> GPS</button>
-              <button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha outro ponto."); }}>{manualLocationPicking ? "Cancelar" : "No mapa"}</button>
+              <button className={cityFormOpen ? "manual-location-active" : ""} onClick={() => setCityFormOpen((open) => !open)}><MapPin size={14}/> Cidade</button>
+              <button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha uma cidade."); }}>{manualLocationPicking ? "Cancelar" : "No mapa"}</button>
             </div>
           </div>
-
+          {cityFormOpen && <form className="map-city-form" onSubmit={(event) => { event.preventDefault(); void saveCityRegion(); }}>
+            <div className="map-city-form-heading"><span><MapPin size={17}/></span><div><b>Onde você quer buscar?</b><small>Informe cidade e estado para encontrar estabelecimentos e preços da região.</small></div></div>
+            <div className="map-city-fields">
+              <label>Cidade<input value={cityInput} onChange={(event) => setCityInput(event.target.value)} placeholder="Ex.: Teresina" autoComplete="address-level2" required minLength={2}/></label>
+              <label>Estado<select value={stateInput} onChange={(event) => setStateInput(event.target.value)} required><option value="">UF</option>{BRAZIL_STATES.map((state) => <option key={state.code} value={state.code}>{state.code} · {state.name}</option>)}</select></label>
+            </div>
+            <button className="map-city-submit" type="submit" disabled={cityLookupLoading}>{cityLookupLoading ? <span className="map-button-loading"/> : <MapPin size={15}/>} {cityLookupLoading ? "Localizando região..." : "Usar esta localização"} <ArrowRight size={15}/></button>
+          </form>}
+          {!cityFormOpen && selectedCity && <div className="map-region-summary"><span>Buscando em <b>{selectedCity}, {selectedState}</b></span><button onClick={() => setCityFormOpen(true)}>Alterar cidade</button></div>}
           <div className="filter-row map-filter-row" aria-label="Filtrar estabelecimentos">
             {["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}</button>)}
           </div>
