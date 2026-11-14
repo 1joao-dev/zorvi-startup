@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { AuthScreen } from "@/components/AuthScreen";
-import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, LocateFixed, MessageCircle, Moon, MoreHorizontal, Pencil, Plus, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
+import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, LocateFixed, MessageCircle, Moon, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
@@ -15,9 +15,10 @@ type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"p
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
 type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; fitBounds(bounds:Array<[number,number]>,options?:Record<string,unknown>):LeafletMap; on(event:string,handler:(event:{latlng:{lat:number;lng:number}})=>void):LeafletMap; remove():void; invalidateSize():void };
+type LeafletCircle = { addTo(layer:LeafletLayerGroup):LeafletCircle };
 type LeafletLayerGroup = { clearLayers():void; addTo(map:LeafletMap):LeafletLayerGroup };
 type LeafletMarker = { addTo(layer:LeafletLayerGroup):LeafletMarker; bindPopup(html:string):LeafletMarker; on(event:string,handler:()=>void):LeafletMarker };
-type LeafletApi = { map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap; tileLayer(url:string,options?:Record<string,unknown>):{addTo(map:LeafletMap):void}; layerGroup():LeafletLayerGroup; divIcon(options:Record<string,unknown>):unknown; marker(coords:[number,number],options?:Record<string,unknown>):LeafletMarker };
+type LeafletApi = { map(container:HTMLElement,options?:Record<string,unknown>):LeafletMap; tileLayer(url:string,options?:Record<string,unknown>):{addTo(map:LeafletMap):void}; layerGroup():LeafletLayerGroup; divIcon(options:Record<string,unknown>):unknown; marker(coords:[number,number],options?:Record<string,unknown>):LeafletMarker; circle(coords:[number,number],options:Record<string,unknown>):LeafletCircle };
 declare global { interface Window { L?:LeafletApi } }
 let leafletLoader:Promise<LeafletApi>|null=null;
 function ensureLeaflet():Promise<LeafletApi>{
@@ -56,8 +57,8 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 }
 
-const MAP_TILE_URL = import.meta.env.VITE_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const MAP_TILE_ATTRIBUTION = import.meta.env.VITE_MAP_TILE_ATTRIBUTION || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> · <a href="https://www.openstreetmap.org/fixthemap">Corrigir mapa</a>';
+const MAP_TILE_URL = import.meta.env.VITE_MAP_TILE_URL || "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+const MAP_TILE_ATTRIBUTION = import.meta.env.VITE_MAP_TILE_ATTRIBUTION || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -712,6 +713,17 @@ mapPrice: result ? Number(result.price) : null,
       map.setView([positionedStores[0].latitude as number, positionedStores[0].longitude as number], 15);
     }
     if (userLocation) {
+      if (userLocation.accuracy !== null && userLocation.accuracy > 0) {
+        leaflet.circle([userLocation.lat, userLocation.lon], {
+          radius: userLocation.accuracy,
+          color: "#b77aff",
+          weight: 1.5,
+          opacity: 0.85,
+          fillColor: "#9b35ff",
+          fillOpacity: 0.13,
+          interactive: false,
+        }).addTo(markerLayer);
+      }
       const youIcon = leaflet.divIcon({
         className: "zorvi-user-location-icon",
         html: '<span class="zorvi-user-location-dot"><i></i></span>',
@@ -746,26 +758,112 @@ mapPrice: result ? Number(result.price) : null,
           {posts.map((p) => <article className="post-card" key={p.id}><div className="post-header"><div className="avatar">{p.author?.avatar_url ? <img src={p.author.avatar_url} alt=""/> : (p.author?.display_name || "Z")[0]}</div><div className="post-author"><b>{p.author?.display_name || "Explorador ZORVI"}</b><small>@{p.author?.username || "explorador"} · {new Date(p.created_at).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</small></div>{session?.user.id === p.user_id && <div className="post-menu-wrap"><button type="button" className="icon-button post-menu-trigger" aria-label="Opções da publicação" aria-expanded={postMenuId === p.id} onClick={() => setPostMenuId((current) => current === p.id ? null : p.id)}><MoreHorizontal size={19}/></button>{postMenuId === p.id && <div className="post-menu"><button type="button" className="edit-post-action" onClick={() => openEditPost(p)}><Pencil size={15}/> Editar publicação</button><button type="button" className="delete-post-action" onClick={() => { setPostMenuId(null); setPostToDelete(p); }}><Trash2 size={15}/> Excluir publicação</button></div>}</div>}</div>{p.content && <p className="post-copy">{p.content}</p>}{p.image_url && <div className="post-image-wrap"><img src={p.image_url} alt="Imagem da publicação"/><span className="post-tag">DESCOBERTA</span></div>}{p.location_name && <div className="post-place"><MapPin size={14}/> {p.location_name}</div>}<div className="post-actions"><button className={p.liked ? "action-active" : ""} onClick={() => void toggleLike(p)}><Heart size={19} fill={p.liked ? "currentColor" : "none"}/> {p.likes_count}</button><button onClick={() => void openComments(p)}><MessageCircle size={19}/> {p.comments_count}</button><button onClick={() => { void navigator.clipboard?.writeText(window.location.href + "?post=" + p.id); notify("Link da publicação copiado."); }}><Share2 size={18}/></button></div></article>)}
           <p className="demo-note">Estabelecimentos cadastrados no catálogo. Ofertas só aparecem quando há fonte e verificação.</p>
         </section>}
-        {tab === "map" && <section className="screen">
-          <div className="screen-title"><div><p className="eyebrow">COMPARE ANTES DE SAIR</p><h1>Mapa de preços</h1><p>Encontre estabelecimentos próximos e compare preços confirmados.</p></div></div>
-          <div className="map-search"><Search size={18}/><input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?"/><button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}}><X size={16}/></button></div>
-          <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>{catalogLoading?"Pesquisando...":"Comparar preços"} <Search size={16}/></button>
-          <div className="location-status"><span>{locationStatus}</span><div className="location-actions"><button onClick={requestLocation}><LocateFixed size={15}/> Usar GPS</button><button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha outro ponto."); }}>{manualLocationPicking ? "Cancelar" : "Escolher no mapa"}</button></div></div>
-          <div className="filter-row">{["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}</div>
-          <div className="zorvi-map-frame">
-            <div className="zorvi-map-topline"><span>MAPA INTERATIVO · {userLocation ? (userLocation.precision === "precise" ? "GPS CONFIRMADO" : userLocation.precision === "approximate" ? "GPS APROXIMADO" : "PONTO MANUAL") : "REFERÊNCIA: TERESINA, PI"}</span><span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length} {mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length===1?"ponto":"pontos"} no mapa</span></div>
-            <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>
-            {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b></div>}
-            {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
-            <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={17}/></button>
-            <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácia</span><span><i className="legend-market"/> Mercado</span><span><i className="legend-other"/> Outros</span></div>
+        {tab === "map" && <section className="screen map-screen">
+          <div className="map-screen-header">
+            <div>
+              <p className="eyebrow">COMPARE ANTES DE SAIR</p>
+              <h1>Mapa de preços</h1>
+              <p>Descubra onde comprar melhor, perto de você.</p>
+            </div>
+            <button className="map-refresh-button" onClick={() => void loadNearbyStores()} aria-label="Atualizar estabelecimentos"><RefreshCw size={17}/></button>
           </div>
-          {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note"><span>{mapStores.filter(store=>store.latitude===null||store.longitude===null).length} lojas ainda aguardam coordenadas. Falhas temporárias podem ser tentadas novamente em alguns minutos.</span><button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Localizar todas"}</button></div>}
-          <div className="nearby-head"><div><p className="eyebrow">{searchPerformed?"LOJAS QUE COMBINAM COM SUA BUSCA":"ESTABELECIMENTOS CADASTRADOS"}</p><h2>{mapStores.length} locais encontrados</h2></div><button className="text-link" onClick={()=>void loadNearbyStores()}>Atualizar</button></div>
-          <div className="place-list">{mapStores.map(s=>{const brand=getStoreBrand(s);return <div className="place-row" key={s.id}><span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}><b>{brand.initials}</b>{s.brand_logo_url&&<img src={s.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span><span className="place-info"><b>{s.brand_name||s.name}</b><small>{s.address} · {s.city}</small></span><span className="place-distance">{typeof s.mapPrice==="number"?(s.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(s.mapPrice):searchPerformed?"Sem preço":s.distance===null?"Localização pendente":`${userLocation?.precision==="approximate"?"≈ ":""}${s.distance<1?Math.round(s.distance*1000)+" m":s.distance.toFixed(1)+" km"}`}</span><a href={s.latitude!==null&&s.longitude!==null?`https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=17/${s.latitude}/${s.longitude}`:`https://www.openstreetmap.org/search?query=${encodeURIComponent(`${s.address}, ${s.city}, ${s.state}, Brasil`)}`} target="_blank" rel="noreferrer" aria-label="Ver endereço no mapa"><ArrowRight size={16}/></a></div>;})}{storeError?<p className="empty-state">{storeError}</p>:!catalogLoading&&mapStores.length===0&&<p className="empty-state">Nenhum estabelecimento encontrado nesta categoria.</p>}</div>
-          {selectedMapStore&&<div className="map-selected-store"><button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={16}/></button><span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}><b>{getStoreBrand(selectedMapStore).initials}</b>{selectedMapStore.brand_logo_url&&<img src={selectedMapStore.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span><div className="place-info"><b>{selectedMapStore.brand_name||selectedMapStore.name}</b><small>{selectedMapStore.address} · {selectedMapStore.city}</small>{typeof selectedMapStore.mapPrice==="number"?<strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço verificado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong>:searchPerformed?<small>Preço ainda não confirmado para esta unidade.</small>:null}</div>{selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}</div>}
-          {searchPerformed&&<div className="price-results"><div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO</p><h2>{priceResults.length} ofertas válidas</h2></div></div>{priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}{priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}</div>}
-          <p className="demo-note">Os preços precisam de fonte e verificação. Ainda não há integração automática com sites de farmácias.</p>
+
+          <div className="map-search-row">
+            <div className="map-search">
+              <Search size={18}/>
+              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?" aria-label="Buscar produto"/>
+              {query && <button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}} aria-label="Limpar busca"><X size={16}/></button>}
+            </div>
+            <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>
+              {catalogLoading ? <span className="map-button-loading"/> : <Search size={16}/>}
+              <span>{catalogLoading ? "Buscando" : "Comparar"}</span>
+            </button>
+          </div>
+
+          <div className="map-location-bar">
+            <div className={"map-location-indicator" + (userLocation ? " is-active" : "")} title={locationStatus}>
+              <span className="map-location-indicator-dot"/>
+              <span className="map-location-copy">
+                <b>{userLocation ? userLocation.precision === "precise" ? "GPS confirmado" : userLocation.precision === "approximate" ? "GPS aproximado" : "Ponto manual" : locationStatus.startsWith("Buscando") ? "Buscando GPS" : "Localização"}</b>
+                <small>{userLocation ? userLocation.precision === "manual" ? "Ponto escolhido no mapa" : "Precisão de ±" + Math.round(userLocation.accuracy || 0) + " m" : locationStatus}</small>
+              </span>
+            </div>
+            <div className="map-location-actions">
+              <button onClick={requestLocation}><LocateFixed size={15}/> GPS</button>
+              <button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha outro ponto."); }}>{manualLocationPicking ? "Cancelar" : "No mapa"}</button>
+            </div>
+          </div>
+
+          <div className="filter-row map-filter-row" aria-label="Filtrar estabelecimentos">
+            {["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}
+          </div>
+
+          <div className="zorvi-map-frame">
+            <div className="zorvi-map-topline">
+              <span><i className="map-live-indicator"/> MAPA INTERATIVO</span>
+              <span>{mapStores.filter(store=>store.latitude!==null&&store.longitude!==null).length + (userLocation ? 1 : 0)} pontos</span>
+            </div>
+            <div ref={mapContainerRef} className={"zorvi-leaflet-map" + (manualLocationPicking ? " is-picking" : "")} aria-label="Mapa interativo de estabelecimentos e preços"/>
+            {!mapReady&&!mapLoadError&&<div className="zorvi-map-overlay"><span className="map-loading-spinner"/><b>Preparando seu mapa...</b><span>Carregando ruas e estabelecimentos</span></div>}
+            {mapLoadError&&<div className="zorvi-map-overlay map-load-error"><b>Não foi possível carregar o mapa.</b><span>{mapLoadError}</span><button onClick={()=>setMapInstanceKey(value=>value+1)}>Tentar novamente</button></div>}
+            {manualLocationPicking&&<div className="map-picking-hint">Toque no mapa para marcar sua localização</div>}
+            <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={19}/></button>
+            <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
+          </div>
+
+          <section className="map-results-sheet" aria-label="Estabelecimentos próximos">
+            <div className="map-sheet-handle"/>
+            <div className="map-sheet-header">
+              <div>
+                <p className="eyebrow">{searchPerformed ? "RESULTADOS DA BUSCA" : "AO SEU REDOR"}</p>
+                <h2>{mapStores.length} {mapStores.length === 1 ? "local próximo" : "locais próximos"}</h2>
+              </div>
+              <button className="map-sheet-refresh" onClick={() => void loadNearbyStores()}><RefreshCw size={14}/> Atualizar</button>
+            </div>
+
+            {selectedMapStore && <div className="map-selected-store">
+              <span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}><b>{getStoreBrand(selectedMapStore).initials}</b>{selectedMapStore.brand_logo_url&&<img src={selectedMapStore.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
+              <div className="place-info">
+                <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
+                <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
+                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1)+" km de você"}</small>}
+              </div>
+              {selectedMapStore.website_url&&<a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
+              <button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={15}/></button>
+            </div>}
+
+            <div className="map-sheet-list">
+              {mapStores.map(store=>{
+                const brand=getStoreBrand(store);
+                const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
+                const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
+                return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
+                  setSelectedMapStore(store);
+                  if(store.latitude!==null&&store.longitude!==null)leafletMapRef.current?.setView([store.latitude,store.longitude],16);
+                }}>
+                  <span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}><b>{brand.initials}</b>{store.brand_logo_url&&<img src={store.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
+                  <span className="place-info"><b>{store.brand_name||store.name}</b><small>{store.address} · {store.city}</small></span>
+                  <span className="map-store-metric">{metric}</span>
+                  <ArrowRight size={15}/>
+                </button>;
+              })}
+              {storeError&&<p className="empty-state">{storeError}</p>}
+              {!catalogLoading&&mapStores.length===0&&!storeError&&<p className="empty-state">Nenhum estabelecimento encontrado nesta categoria.</p>}
+              {catalogLoading&&<p className="empty-state">Atualizando estabelecimentos...</p>}
+            </div>
+
+            {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note">
+              <span>{mapStores.filter(store=>store.latitude===null||store.longitude===null).length} lojas ainda não têm coordenadas confirmadas. Só exibimos pins com localização confiável.</span>
+              <button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Localizar"}</button>
+            </div>}
+          </section>
+
+          {searchPerformed&&<div className="price-results map-price-results">
+            <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} ofertas válidas</h2></div></div>
+            {priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}
+            {priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}
+          </div>}
+          <p className="demo-note map-demo-note">Preços só aparecem quando existe uma fonte verificável. Ainda não há integração automática com todos os sites de farmácias.</p>
         </section>}
         {tab === "ai" && <section className="screen ai-screen">
           <div className="ai-heading"><div className="ai-orb"><img src="/zorvi-mark.webp" alt="Símbolo ZORVI" /></div><p className="eyebrow">SUA COMPANHEIRA DE DESCOBERTAS</p><h1>Olá! Eu sou a<br/><span>ZORVI AI.</span></h1><p>Uma nova forma de encontrar, comparar e descobrir o mundo ao seu redor.</p></div>

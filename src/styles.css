@@ -174,3 +174,107 @@
 .zorvi-map-marker-symbol>img{position:relative;z-index:1;padding:3px;object-fit:contain;background:#fff}
 .store-brand-mini{position:relative}
 .store-brand-mini>img{position:relative;z-index:1}
+
+
+/* ZORVI map experience — mobile-first, map-led layout */
+.map-screen{
+  margin:-24px -20px -26px;
+  padding:16px 15px 18px;
+  min-height:calc(100dvh - 151px);
+  display:flex;
+  flex-direction:column;
+  gap:11px;
+}
+.map-screen-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.map-screen-header .eyebrow{margin-bottom:6px}
+.map-screen-header h1{font:700 28px/1 "Space Grotesk",sans-serif;letter-spacing:-1.1px;margin:0}
+.map-screen-header p:not(.eyebrow){font-size:10px;color:var(--muted);margin:6px 0 0;line-height:1.4}
+.map-refresh-button{width:40px;height:40px;flex:none;display:grid;place-items:center;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:#c99aff}
+.map-search-row{display:flex;align-items:center;gap:8px}
+.map-search-row .map-search{flex:1;min-width:0;width:auto;min-height:49px;margin:0;padding:0 12px;border-radius:15px;background:var(--surface);box-shadow:inset 0 1px 0 #ffffff05}
+.map-search-row .map-search input{font-size:11px}
+.map-search-row .map-search button{width:25px;height:30px;flex:none}
+.map-search-row .price-search-button{width:auto;min-height:49px;flex:none;justify-content:center;gap:7px;margin:0;padding:0 13px;border-radius:14px;font-size:10px;white-space:nowrap;box-shadow:0 6px 18px #7200ff30}
+.map-button-loading{width:14px;height:14px;border:2px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:zorvi-spin .8s linear infinite}
+.map-location-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:38px}
+.map-location-indicator{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.map-location-indicator-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#8b8297;box-shadow:0 0 0 4px #8b82971c}
+.map-location-indicator.is-active .map-location-indicator-dot{background:#49d69b;box-shadow:0 0 0 4px #49d69b1b}
+.map-location-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.map-location-copy b{font-size:10px;font-weight:750;color:var(--text)}
+.map-location-copy small{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;color:var(--muted)}
+.map-location-actions{display:flex;align-items:center;gap:6px;flex:none}
+.map-location-actions button{height:34px;display:flex;align-items:center;justify-content:center;gap:5px;padding:0 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:#c99aff;font-size:9px;font-weight:700;white-space:nowrap}
+.map-location-actions button.manual-location-active{background:#32145a;border-color:#a855f7;color:#fff}
+.map-filter-row{flex:none;gap:7px;padding:0 0 1px;margin:0}
+.map-filter-row .filter-chip{padding:8px 13px;font-size:10px;background:var(--surface);color:var(--muted)}
+.map-filter-row .filter-chip.selected{background:#7b20e526;color:#d5b4ff;border-color:#a855f7;box-shadow:inset 0 0 0 1px #a855f722}
+.zorvi-map-frame{position:relative;display:flex;flex:1 1 340px;flex-direction:column;min-height:330px;max-height:510px;margin:0;overflow:hidden;border:1px solid #a855f744;border-radius:22px;background:#0e0b16;box-shadow:0 14px 35px #0003;isolation:isolate}
+.zorvi-map-topline{height:35px;flex:none;padding:0 13px;background:#100b19;color:#c8b0e7;font-size:8px;letter-spacing:.13em}
+.zorvi-map-topline span:first-child{display:flex;align-items:center;gap:7px}
+.zorvi-map-topline span:last-child{font-size:9px;color:#b4a5c8}
+.map-live-indicator{width:6px;height:6px;border-radius:50%;background:#4bd69a;box-shadow:0 0 9px #4bd69a}
+.zorvi-leaflet-map{height:auto;min-height:294px;flex:1;width:100%;background:#100d18;z-index:1}
+.zorvi-map-frame .leaflet-container{font-family:"DM Sans",sans-serif;background:#100d18}
+.zorvi-map-frame .leaflet-tile-pane{filter:none!important}
+.zorvi-map-frame .leaflet-top.leaflet-left{left:auto;right:11px;top:11px}
+.zorvi-map-frame .leaflet-control-zoom{overflow:hidden;border:1px solid #ffffff22!important;border-radius:12px!important;box-shadow:0 5px 18px #0006!important}
+.zorvi-map-frame .leaflet-control-zoom a{width:31px!important;height:31px!important;line-height:31px!important;background:#140e20ed!important;color:#e8d8ff!important;border:0!important;font-size:18px!important}
+.zorvi-map-frame .leaflet-control-zoom a+a{border-top:1px solid #ffffff1c!important}
+.zorvi-map-frame .leaflet-control-zoom a:hover{background:#28153d!important}
+.zorvi-map-frame .leaflet-control-attribution{font-size:7px;background:#0e0b16dc!important;color:#b8a9c9!important}
+.zorvi-map-frame .leaflet-control-attribution a{color:#c6a0ff!important}
+.zorvi-map-frame .leaflet-popup-content-wrapper,.zorvi-map-frame .leaflet-popup-tip{background:#171020;color:#fff}
+.zorvi-map-frame .leaflet-popup-content{margin:12px 14px;min-width:170px}
+.zorvi-map-frame .leaflet-popup-close-button{color:#fff!important}
+.zorvi-map-overlay{inset:35px 0 0;z-index:500;background:#100b19d9}
+.zorvi-map-gps{right:12px;bottom:49px;width:43px;height:43px;border:1px solid #ffffff25;border-radius:15px;background:#160f22f2;color:#d7baff;box-shadow:0 6px 18px #0007}
+.zorvi-map-legend{left:10px;bottom:12px;gap:9px;padding:8px 10px;border:1px solid #ffffff20;border-radius:12px;background:#100b19eF;color:#eee7f8;font-size:8px;box-shadow:0 5px 15px #0005}
+.zorvi-map-legend i{width:7px;height:7px}
+.map-picking-hint{position:absolute;z-index:460;top:46px;left:50%;transform:translateX(-50%);max-width:calc(100% - 90px);padding:8px 11px;border:1px solid #b77aff66;border-radius:20px;background:#170d26ed;color:#f0e3ff;font-size:9px;font-weight:700;text-align:center;white-space:nowrap;box-shadow:0 5px 18px #0005}
+.zorvi-map-marker.is-selected .zorvi-map-marker-symbol{transform:translateY(-3px) scale(1.1);border-color:#fff;box-shadow:0 0 0 4px #ffffff28,0 8px 20px #000b,0 0 22px color-mix(in srgb,var(--brand-accent) 75%,transparent)}
+.zorvi-map-marker.is-selected .zorvi-map-marker-price{border-color:#c9a4ff;background:#241238}
+.zorvi-user-location-dot{z-index:2}
+.map-results-sheet{flex:none;max-height:245px;overflow:hidden;padding:11px 12px 10px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(145deg,var(--surface),color-mix(in srgb,var(--surface) 86%,#31114f));box-shadow:0 12px 30px #0003}
+.map-sheet-handle{width:34px;height:4px;margin:0 auto 10px;border-radius:5px;background:#ffffff35}
+.map-sheet-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.map-sheet-header .eyebrow{font-size:8px;margin:0 0 3px}
+.map-sheet-header h2{font:650 15px/1.1 "Space Grotesk",sans-serif;letter-spacing:-.35px;margin:0}
+.map-sheet-refresh{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);color:#c99aff;font-size:9px;font-weight:700;white-space:nowrap}
+.map-sheet-list{max-height:122px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#6e3e91 transparent}
+.map-store-row{width:100%;display:flex;align-items:center;gap:9px;padding:8px 2px;border:0;border-top:1px solid var(--line);background:transparent;text-align:left;color:var(--text)}
+.map-store-row.is-selected{background:#8b35ff13}
+.map-store-row .store-brand-mini{width:37px;height:37px;flex-basis:37px;border-radius:12px}
+.map-store-row .place-info{flex:1;min-width:0;gap:3px}
+.map-store-row .place-info b{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.map-store-row .place-info small{font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.map-store-metric{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9a7f3;font-size:9px;font-weight:750;text-align:right}
+.map-store-row>svg{flex:none;color:var(--muted)}
+.map-selected-store{margin:0 0 7px;padding:9px 34px 9px 9px;border-radius:13px;background:#8b35ff16;border-color:#a855f744}
+.map-selected-store .place-info b{font-size:10px}
+.map-selected-store .place-info small{font-size:8px}
+.map-selected-store .place-info strong{font-size:12px}
+.map-selected-store .map-selected-close{right:5px;top:5px}
+.map-coordinate-note{display:flex;align-items:center;gap:8px;margin:7px 0 0;padding-top:7px;border-top:1px solid var(--line);color:var(--muted);font-size:8px;line-height:1.35}
+.map-coordinate-note span{flex:1;min-width:0}
+.map-coordinate-note button{flex:none;padding:6px 8px;border:1px solid #8f51d877;border-radius:9px;background:#251438;color:#d7baff;font-size:8px;font-weight:750}
+.map-price-results{margin:16px 2px 0}
+.map-demo-note{margin:12px 8px 0;font-size:8px}
+.theme-light .map-results-sheet{background:linear-gradient(145deg,#fff,#f3eafa)}
+.theme-light .map-location-actions button{background:#fff}
+.theme-light .map-store-row.is-selected{background:#7b20e512}
+@media(max-height:740px) and (max-width:600px){
+  .map-screen{gap:8px;padding-top:12px}
+  .zorvi-map-frame{min-height:275px}
+  .zorvi-leaflet-map{min-height:240px}
+  .map-results-sheet{max-height:195px}
+  .map-sheet-list{max-height:82px}
+}
+@media(max-width:370px){
+  .map-screen{padding-left:12px;padding-right:12px}
+  .map-screen-header h1{font-size:25px}
+  .map-search-row .price-search-button{padding:0 10px}
+  .map-location-copy small{max-width:125px}
+  .map-location-actions button{padding:0 8px}
+  .map-filter-row .filter-chip{padding:8px 11px}
+}
