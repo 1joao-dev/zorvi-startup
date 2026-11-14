@@ -304,7 +304,6 @@ async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
   structuredUrl.searchParams.set("state", state);
   structuredUrl.searchParams.set("countrycode", "br");
   structuredUrl.searchParams.set("limit", "8");
-  structuredUrl.searchParams.set("lang", "pt");
 
   try {
     await wait(1100);
@@ -325,7 +324,6 @@ async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
   textUrl.searchParams.set("q", query);
   textUrl.searchParams.set("countrycode", "br");
   textUrl.searchParams.set("limit", "8");
-  textUrl.searchParams.set("lang", "pt");
 
   try {
     await wait(1100);

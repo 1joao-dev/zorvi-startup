@@ -280,10 +280,10 @@ function storeMatchesRegion(store: Pick<Store, "city" | "state">, city: string, 
 }
 async function geocodeCityCenter(city: string, stateCode: string): Promise<{ lat: number; lon: number } | null> {
   const stateName = BRAZIL_STATE_NAMES[stateCode.toUpperCase()] || stateCode;
-  const url = new URL("https://photon.komoot.io/api/");
+  const url = new URL("https://photon.komoot.io/api");
   url.searchParams.set("q", [city, stateName, "Brasil"].join(", "));
+  url.searchParams.set("countrycode", "br");
   url.searchParams.set("limit", "8");
-  url.searchParams.set("lang", "pt");
   const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("Não foi possível localizar esta cidade agora.");
   const payload = await response.json() as { features?: Array<{ geometry?: { coordinates?: number[] }; properties?: Record<string, unknown> }> };
@@ -772,7 +772,11 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
           ? distanceKm(userLocation.lat, userLocation.lon, store.latitude, store.longitude)
           : null,
       }))
-      .filter((store) => store.distance === null || userLocation?.precision === "city" || store.distance <= 20)
+      .filter((store) => {
+        if (selectedCity) return true;
+        if (userLocation) return store.distance !== null && store.distance <= 20;
+        return true;
+      })
       .sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999)),
     [stores, filter, userLocation, selectedCity, selectedState]
   );
@@ -802,6 +806,8 @@ mapPrice: result ? Number(result.price) : null,
     const prices = mapStores.map(store => store.mapPrice).filter((price): price is number => typeof price === "number" && Number.isFinite(price));
     return prices.length ? Math.min(...prices) : null;
   }, [mapStores]);
+  const mapLocatedCount = mapStores.filter(store => store.latitude !== null && store.longitude !== null).length;
+  const mapPendingCount = mapStores.length - mapLocatedCount;
 
   const geocodeStores = useCallback(async (silent = false) => {
     if (!supabase || geocodingStores) return;
@@ -1235,17 +1241,17 @@ mapPrice: result ? Number(result.price) : null,
             <div className="zorvi-map-legend"><span><i className="legend-user"/> Você</span><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
           </div>
 
-          <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "") + (mapSheetExpanded ? " is-expanded" : "")} aria-label="Estabelecimentos próximos">
+          <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "") + (mapSheetExpanded ? " is-expanded" : "")} aria-label="Estabelecimentos na região">
             <button type="button" className="map-sheet-handle" onClick={() => setMapSheetExpanded(value => !value)} aria-expanded={mapSheetExpanded} aria-label={mapSheetExpanded ? "Recolher lista de estabelecimentos" : "Expandir lista de estabelecimentos"}/>
             <div className="map-sheet-header">
               <div>
-                <p className="eyebrow">{searchPerformed ? "RESULTADOS DA BUSCA" : "AO SEU REDOR"}</p>
-                <h2>{mapStores.length} {mapStores.length === 1 ? "local próximo" : "locais próximos"}</h2>
+                <p className="eyebrow">{searchPerformed ? "RESULTADOS DA BUSCA" : selectedCity ? "REGIÃO SELECIONADA" : userLocation ? "AO SEU REDOR" : "ESTABELECIMENTOS CADASTRADOS"}</p>
+                <h2>{mapStores.length} {mapStores.length === 1 ? "estabelecimento" : "estabelecimentos"}</h2>
               </div>
               <button className="map-sheet-refresh" onClick={() => void loadNearbyStores()}><RefreshCw size={14}/> Atualizar</button>
             </div>
             <div className="map-sheet-summary">
-              <span><b>{mapStores.length}</b> {mapStores.length === 1 ? "estabelecimento" : "estabelecimentos"}</span>
+              <span><b>{mapLocatedCount}</b> no mapa{mapPendingCount > 0 ? " · " + mapPendingCount + " aguardando localização" : " · todos localizados"}</span>
               {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter}</span>}
             </div>
 
@@ -1254,7 +1260,7 @@ mapPrice: result ? Number(result.price) : null,
               <div className="place-info">
                 <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
-                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1) + (selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
+                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Localização pendente":selectedMapStore.distance.toFixed(1) + (userLocation?.precision==="city" && selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
               </div>
               <div className="map-selected-actions">
                 {selectedMapStore.website_url && <a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
