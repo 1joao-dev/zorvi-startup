@@ -80,7 +80,7 @@ function storeMatchesRegion(store: Pick<Store, "city" | "state">, city: string, 
   const storeState = normalizeRegionText(store.state || "");
   const expectedState = normalizeRegionText(BRAZIL_STATE_NAMES[stateCode.toUpperCase()] || stateCode);
   const stateAbbreviation = normalizeRegionText(stateCode);
-  const stateMatches = storeState === expectedState || storeState === stateAbbreviation || storeState.includes(expectedState) || expectedState.includes(storeState);
+  const stateMatches = Boolean(storeState) && (storeState === expectedState || storeState === stateAbbreviation || storeState.includes(expectedState) || expectedState.includes(storeState));
   return Boolean(storeCity && expectedCity && storeCity === expectedCity && stateMatches);
 }
 async function geocodeCityCenter(city: string, stateCode: string): Promise<{ lat: number; lon: number } | null> {
@@ -575,7 +575,7 @@ const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
           ? distanceKm(userLocation.lat, userLocation.lon, store.latitude, store.longitude)
           : null,
       }))
-      .filter((store) => store.distance === null || store.distance <= (userLocation?.precision === "city" ? 35 : 20))
+      .filter((store) => store.distance === null || userLocation?.precision === "city" || store.distance <= 20)
       .sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999)),
     [stores, filter, userLocation, selectedCity, selectedState]
   );
@@ -719,7 +719,7 @@ mapPrice: result ? Number(result.price) : null,
             userLocation.lon,
             row.store!.latitude,
             row.store!.longitude
-          ) <= (userLocation.precision === "city" ? 35 : 20))
+          ) <= 20 || userLocation.precision === "city")
       );
       verifiedRows.sort((a, b) => Number(a.price) - Number(b.price));
       setPriceResults(verifiedRows);
@@ -986,7 +986,7 @@ mapPrice: result ? Number(result.price) : null,
               <div className="place-info">
                 <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
-                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1)+" km de você"}</small>}
+                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1) + (selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
               </div>
               <div className="map-selected-actions">
                 {selectedMapStore.website_url && <a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
@@ -998,7 +998,7 @@ mapPrice: result ? Number(result.price) : null,
             <div className="map-sheet-list">
               {mapStores.map(store=>{
                 const brand=getStoreBrand(store);
-                const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
+                const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"||userLocation?.precision==="city"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
                 const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
                 return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
                   setSelectedMapStore(store);
