@@ -679,7 +679,8 @@ mapPrice: result ? Number(result.price) : null,
       const logoMarkup = logoUrl
         ? `<img src="${logoUrl}" alt="" referrerpolicy="no-referrer" onerror="this.remove()" />`
         : "";
-      const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}" style="--brand-accent:${brand.color}">
+      const selectedClass = selectedMapStore?.id === store.id ? " is-selected" : "";
+      const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}${selectedClass}" style="--brand-accent:${brand.color}">
         <span class="zorvi-map-marker-symbol"><b>${escapeMapHtml(brand.initials)}</b>${logoMarkup}
           <i class="zorvi-map-marker-category">${categoryGlyph}</i>
         </span>
@@ -734,7 +735,7 @@ mapPrice: result ? Number(result.price) : null,
         .addTo(markerLayer)
         .bindPopup(userLocation.precision === "precise" ? "<b>GPS confirmado</b>" : userLocation.precision === "approximate" ? `<b>GPS aproximado</b><small>Margem de erro: ±${Math.round(userLocation.accuracy || 0)} m</small>` : "<b>Ponto escolhido manualmente</b>");
     }
-  }, [mapReady, mapStores, userLocation, searchPerformed, query, locationStatus]);
+  }, [mapReady, mapStores, userLocation, searchPerformed, query, locationStatus, selectedMapStore]);
 
   if (isSupabaseConfigured && authLoading) return <div className="zorvi-auth-loading"><img src="/zorvi-mark.webp" alt="ZORVI"/><span>Preparando sua experiência...</span></div>;
   if (isSupabaseConfigured && !session) return <AuthScreen />;
@@ -795,7 +796,7 @@ mapPrice: result ? Number(result.price) : null,
           </div>
 
           <div className="filter-row map-filter-row" aria-label="Filtrar estabelecimentos">
-            {["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>setFilter(f)}>{f}</button>)}
+            {["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}</button>)}
           </div>
 
           <div className="zorvi-map-frame">
@@ -811,7 +812,7 @@ mapPrice: result ? Number(result.price) : null,
             <div className="zorvi-map-legend"><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
           </div>
 
-          <section className="map-results-sheet" aria-label="Estabelecimentos próximos">
+          <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "")} aria-label="Estabelecimentos próximos">
             <div className="map-sheet-handle"/>
             <div className="map-sheet-header">
               <div>

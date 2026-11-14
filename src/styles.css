@@ -278,3 +278,5 @@
   .map-location-actions button{padding:0 8px}
   .map-filter-row .filter-chip{padding:8px 11px}
 }
+
+.map-results-sheet.has-selection .map-sheet-list{max-height:72px}
