@@ -167,3 +167,10 @@
 
 /* ZORVI map: compact brand pins and manual location selection */
 .location-status{flex-wrap:wrap}.location-status>span{flex:1;min-width:145px}.location-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.location-status button.manual-location-active{border-color:#a855f7;background:#32145a;color:#fff}.zorvi-leaflet-map.is-picking{cursor:crosshair}.zorvi-map-marker{position:relative;width:42px;height:42px;max-width:none;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;white-space:normal}.zorvi-map-marker:after{display:none}.zorvi-map-marker.with-price{width:74px;height:56px}.zorvi-map-marker-symbol{flex:0 0 36px;width:36px;height:36px;border:2px solid #fff;border-radius:12px;background:var(--brand-accent);box-shadow:0 4px 15px #0009,0 0 0 3px color-mix(in srgb,var(--brand-accent) 35%,transparent)}.zorvi-map-marker-symbol>img{border-radius:9px}.zorvi-map-marker-category{right:-6px;bottom:-5px;width:16px;height:16px}.zorvi-map-marker-label{display:none}.zorvi-map-marker-price{position:relative;z-index:3;max-width:74px;padding:3px 6px;border:1px solid #ffffff35;border-radius:7px;background:#100b18f2;color:#fff;font-size:9px;font-weight:850;line-height:1;white-space:nowrap;box-shadow:0 3px 10px #0008}.zorvi-map-marker-price.is-price{color:#baf2c8;border-color:#4ba66a88}.zorvi-map-marker-price.no-price{color:#e5c48a}.zorvi-map-frame .leaflet-popup-content-wrapper,.zorvi-map-frame .leaflet-popup-tip{background:#171020;color:#fff}
+
+/* ZORVI brand pins: show a real brand icon with a reliable initials fallback. */
+.zorvi-map-marker-symbol{position:relative}
+.zorvi-map-marker-symbol>b,.store-brand-mini>b{position:absolute;inset:0;display:grid;place-items:center;z-index:0}
+.zorvi-map-marker-symbol>img{position:relative;z-index:1;padding:3px;object-fit:contain;background:#fff}
+.store-brand-mini{position:relative}
+.store-brand-mini>img{position:relative;z-index:1}

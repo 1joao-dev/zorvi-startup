@@ -126,7 +126,7 @@ create table if not exists public.price_observations (id uuid primary key defaul
 create index if not exists price_observations_product_price_idx on public.price_observations(product_id,price) where verification_status='verified';
 create index if not exists price_observations_store_idx on public.price_observations(store_id,observed_at desc);
 alter table public.stores enable row level security;alter table public.products enable row level security;alter table public.price_observations enable row level security;
-grant select on public.stores,public.products,public.price_observations to authenticated;grant insert,update,delete on public.price_observations to authenticated;
+grant select on public.stores,public.products,public.price_observations to authenticated;grant insert,update,delete on public.price_observations to authenticated;grant select,update on public.stores to service_role;grant select,update on public.stores to service_role;
 drop policy if exists "Authenticated users can read verified stores" on public.stores;create policy "Authenticated users can read verified stores" on public.stores for select to authenticated using(verification_status='verified');
 drop policy if exists "Authenticated users can read product catalog" on public.products;create policy "Authenticated users can read product catalog" on public.products for select to authenticated using(true);
 drop policy if exists "Authenticated users can read verified prices and own reports" on public.price_observations;create policy "Authenticated users can read verified prices and own reports" on public.price_observations for select to authenticated using(verification_status='verified' or submitted_by=(select auth.uid()));
