@@ -57,8 +57,9 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
 }
 
-const MAP_TILE_URL = import.meta.env.VITE_MAP_TILE_URL || "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
-const MAP_TILE_ATTRIBUTION = import.meta.env.VITE_MAP_TILE_ATTRIBUTION || '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · &copy; <a href="https://carto.com/attributions">CARTO</a>';
+// CARTO Dark Matter is served without a client API key. Keep attribution visible.
+const MAP_TILE_URL = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -172,6 +173,7 @@ const [locationStatus, setLocationStatus] = useState("Ative o GPS para encontrar
   const leafletMapRef = useRef<LeafletMap|null>(null);
 const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
   const manualLocationPickingRef = useRef(false);
+  const autoGeocodeStartedRef = useRef(false);
   const [saved, setSaved] = useState<number[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
@@ -488,7 +490,7 @@ mapPrice: result ? Number(result.price) : null,
     });
   },[nearbyStores,searchPerformed,searchProductCategory,priceResults]);
 
-  const geocodeStores = async () => {
+  const geocodeStores = useCallback(async (silent = false) => {
     if (!supabase || geocodingStores) return;
     setGeocodingStores(true);
     try {
@@ -498,8 +500,8 @@ mapPrice: result ? Number(result.price) : null,
       let totalFailed = 0;
       let previousRemaining = Number.POSITIVE_INFINITY;
 
-      // The Edge Function processes five addresses per request to respect the geocoder.
-      // Continue in batches so one tap can populate the whole visible map.
+      // Each Edge Function call processes a rate-limited batch of five addresses.
+      // Sequential batches let the map fill itself without requiring a manual action.
       for (let round = 0; round < 10; round += 1) {
         const { data, error } = await supabase.functions.invoke("geocode-stores", {
           body: { category: filter === "Todos" ? null : filter },
@@ -526,19 +528,31 @@ mapPrice: result ? Number(result.price) : null,
       }
 
       await loadNearbyStores();
-      if (totalUpdated > 0) {
-        notify(`${totalUpdated} lojas receberam coordenadas. ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
-      } else {
-        notify(`Foram verificadas ${totalProcessed} lojas. Nenhuma coordenada foi confirmada; ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
+      if (!silent) {
+        if (totalUpdated > 0) {
+          notify(`${totalUpdated} lojas receberam coordenadas. ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
+        } else {
+          notify(`Foram verificadas ${totalProcessed} lojas. Nenhuma coordenada foi confirmada; ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
+        }
       }
     } catch (error) {
-      notify(error && typeof error === "object" && "message" in error
+      const message = error && typeof error === "object" && "message" in error
         ? String((error as { message?: unknown }).message || "")
-        : "Não foi possível localizar as lojas agora.");
+        : "Não foi possível localizar as lojas agora.";
+      if (silent) setStoreError(message);
+      else notify(message);
     } finally {
       setGeocodingStores(false);
     }
-  };
+  }, [filter, geocodingStores, loadNearbyStores]);
+
+  useEffect(() => {
+    if (tab !== "map" || catalogLoading || stores.length === 0 || geocodingStores || autoGeocodeStartedRef.current) return;
+    const hasPendingCoordinates = stores.some((store) => store.latitude === null || store.longitude === null);
+    if (!hasPendingCoordinates) return;
+    autoGeocodeStartedRef.current = true;
+    void geocodeStores(true);
+  }, [tab, catalogLoading, stores, geocodingStores, geocodeStores]);
 
   const searchPrices = async () => {
     if (!supabase || !query.trim()) return;
@@ -854,8 +868,8 @@ mapPrice: result ? Number(result.price) : null,
             </div>
 
             {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note">
-              <span>{mapStores.filter(store=>store.latitude===null||store.longitude===null).length} lojas ainda não têm coordenadas confirmadas. Só exibimos pins com localização confiável.</span>
-              <button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Localizar"}</button>
+              <span>{geocodingStores ? "Buscando coordenadas automaticamente pelos endereços..." : mapStores.filter(store=>store.latitude===null||store.longitude===null).length + " lojas ainda aguardam uma localização confiável."}</span>
+              <button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Tentar novamente"}</button>
             </div>}
           </section>
 
