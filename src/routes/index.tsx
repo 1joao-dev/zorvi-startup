@@ -11,7 +11,7 @@ type UserProfile = { id: string; username: string | null; display_name: string; 
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null };
-type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual" };
+type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
 type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; fitBounds(bounds:Array<[number,number]>,options?:Record<string,unknown>):LeafletMap; on(event:string,handler:(event:{latlng:{lat:number;lng:number}})=>void):LeafletMap; remove():void; invalidateSize():void };
@@ -60,6 +60,57 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 // OpenStreetMap raster tiles need no client API key. Keep attribution visible and respect tile usage limits.
 const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
+
+const BRAZIL_STATES = [
+  { code: "AC", name: "Acre" }, { code: "AL", name: "Alagoas" }, { code: "AP", name: "Amapá" }, { code: "AM", name: "Amazonas" },
+  { code: "BA", name: "Bahia" }, { code: "CE", name: "Ceará" }, { code: "DF", name: "Distrito Federal" }, { code: "ES", name: "Espírito Santo" },
+  { code: "GO", name: "Goiás" }, { code: "MA", name: "Maranhão" }, { code: "MT", name: "Mato Grosso" }, { code: "MS", name: "Mato Grosso do Sul" },
+  { code: "MG", name: "Minas Gerais" }, { code: "PA", name: "Pará" }, { code: "PB", name: "Paraíba" }, { code: "PR", name: "Paraná" },
+  { code: "PE", name: "Pernambuco" }, { code: "PI", name: "Piauí" }, { code: "RJ", name: "Rio de Janeiro" }, { code: "RN", name: "Rio Grande do Norte" },
+  { code: "RS", name: "Rio Grande do Sul" }, { code: "RO", name: "Rondônia" }, { code: "RR", name: "Roraima" }, { code: "SC", name: "Santa Catarina" },
+  { code: "SP", name: "São Paulo" }, { code: "SE", name: "Sergipe" }, { code: "TO", name: "Tocantins" },
+];
+const BRAZIL_STATE_NAMES: Record<string, string> = Object.fromEntries(BRAZIL_STATES.map((state) => [state.code, state.name]));
+function normalizeRegionText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+function storeMatchesRegion(store: Pick<Store, "city" | "state">, city: string, stateCode: string) {
+  const storeCity = normalizeRegionText(store.city || "");
+  const expectedCity = normalizeRegionText(city);
+  const storeState = normalizeRegionText(store.state || "");
+  const expectedState = normalizeRegionText(BRAZIL_STATE_NAMES[stateCode.toUpperCase()] || stateCode);
+  const stateAbbreviation = normalizeRegionText(stateCode);
+  const stateMatches = Boolean(storeState) && (storeState === expectedState || storeState === stateAbbreviation || storeState.includes(expectedState) || expectedState.includes(storeState));
+  return Boolean(storeCity && expectedCity && storeCity === expectedCity && stateMatches);
+}
+async function geocodeCityCenter(city: string, stateCode: string): Promise<{ lat: number; lon: number } | null> {
+  const stateName = BRAZIL_STATE_NAMES[stateCode.toUpperCase()] || stateCode;
+  const url = new URL("https://photon.komoot.io/api/");
+  url.searchParams.set("q", [city, stateName, "Brasil"].join(", "));
+  url.searchParams.set("limit", "8");
+  url.searchParams.set("lang", "pt");
+  const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("Não foi possível localizar esta cidade agora.");
+  const payload = await response.json() as { features?: Array<{ geometry?: { coordinates?: number[] }; properties?: Record<string, unknown> }> };
+  const expectedCity = normalizeRegionText(city);
+  const expectedState = normalizeRegionText(stateName);
+  const feature = (payload.features || []).find((item) => {
+    const properties = item.properties || {};
+    const resultCity = normalizeRegionText(String(properties.city || properties.locality || properties.name || ""));
+    const resultState = normalizeRegionText(String(properties.state || ""));
+    const country = normalizeRegionText(String(properties.country || ""));
+    const coordinates = item.geometry?.coordinates;
+    return resultCity === expectedCity
+      && (resultState === expectedState || resultState.includes(expectedState) || expectedState.includes(resultState))
+      && (!country || country.includes("brasil") || country.includes("brazil"))
+      && Array.isArray(coordinates) && Number.isFinite(coordinates[0]) && Number.isFinite(coordinates[1]);
+  });
+  const coordinates = feature?.geometry?.coordinates;
+  if (!coordinates || coordinates.length < 2) return null;
+  const lon = Number(coordinates[0]), lat = Number(coordinates[1]);
+  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+}
+
 
 function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -156,7 +207,35 @@ function App() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Todos");
   const [userLocation, setUserLocation] = useState<UserLocation|null>(null);
-const [locationStatus, setLocationStatus] = useState("Ative o GPS para encontrar lojas próximas.");
+  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedState, setSelectedState] = useState("");
+  const [cityInput, setCityInput] = useState("");
+  const [stateInput, setStateInput] = useState("");
+  const [cityFormOpen, setCityFormOpen] = useState(true);
+  const [cityLookupLoading, setCityLookupLoading] = useState(false);
+  const [locationStatus, setLocationStatus] = useState("Informe sua cidade e estado ou use o GPS.");
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem("zorvi-map-region-v1");
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as { city?: string; state?: string; lat?: number; lon?: number };
+      if (!saved.city || !saved.state) return;
+      setCityInput(saved.city); setStateInput(saved.state);
+      setSelectedCity(saved.city); setSelectedState(saved.state); setCityFormOpen(false);
+      setLocationStatus("Região salva · " + saved.city + ", " + saved.state);
+      if (Number.isFinite(saved.lat) && Number.isFinite(saved.lon)) {
+        setUserLocation({ lat: Number(saved.lat), lon: Number(saved.lon), accuracy: null, precision: "city" });
+      } else {
+        void geocodeCityCenter(saved.city, saved.state).then((point) => {
+          if (!point) return;
+          setUserLocation({ ...point, accuracy: null, precision: "city" });
+          window.localStorage.setItem("zorvi-map-region-v1", JSON.stringify({ city: saved.city, state: saved.state, ...point }));
+        }).catch(() => setLocationStatus("Região salva · " + saved.city + ", " + saved.state + ". O mapa usará os endereços cadastrados."));
+      }
+    } catch { window.localStorage.removeItem("zorvi-map-region-v1"); }
+  }, []);
+
   const [manualLocationPicking, setManualLocationPicking] = useState(false);
   const [stores, setStores] = useState<Store[]>([]);
   const [storeError, setStoreError] = useState("");
@@ -388,11 +467,10 @@ const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
     manualLocationPickingRef.current = false;
     setManualLocationPicking(false);
     if (!navigator.geolocation) {
-      setUserLocation(null);
+      if (!selectedCity) setUserLocation(null);
       setLocationStatus("Este navegador não oferece localização. Escolha um ponto manualmente no mapa.");
       return;
     }
-    setUserLocation(null);
     setLocationStatus("Buscando sua localização...");
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
@@ -403,11 +481,13 @@ const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
           && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
         if (!validCoordinates || !Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 5000) {
           const accuracyLabel = Number.isFinite(accuracy) ? `±${Math.round(accuracy)} m` : "indefinida";
-          setUserLocation(null);
+          if (!selectedCity) setUserLocation(null);
           setLocationStatus(`O GPS retornou uma posição muito imprecisa (${accuracyLabel}). Tente novamente ou escolha um ponto no mapa.`);
           return;
         }
         const precision = accuracy <= 100 ? "precise" : "approximate";
+        setSelectedCity(""); setSelectedState(""); setCityFormOpen(false);
+        window.localStorage.removeItem("zorvi-map-region-v1");
         setUserLocation({ lat: latitude, lon: longitude, accuracy, precision });
         setLocationStatus(
           precision === "precise"
@@ -416,7 +496,7 @@ const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
         );
       },
       (error) => {
-        setUserLocation(null);
+        if (!selectedCity) setUserLocation(null);
         setLocationStatus(
           error.code === error.PERMISSION_DENIED
             ? "Permissão negada. Libere a localização no navegador ou escolha um ponto no mapa."
@@ -427,7 +507,7 @@ const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
       },
       { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }
     );
-  }, []);
+  }, [selectedCity]);
 
   const loadNearbyStores = useCallback(async () => {
     if (!supabase) return;
@@ -456,18 +536,48 @@ const leafletMarkerLayerRef = useRef<LeafletLayerGroup|null>(null);
     if (tab === "map") void loadNearbyStores();
   }, [tab, loadNearbyStores]);
 
+
+  const saveCityRegion = async () => {
+    const city = cityInput.trim().replace(/\s+/g, " ");
+    const stateCode = stateInput.trim().toUpperCase();
+    if (city.length < 2 || !BRAZIL_STATE_NAMES[stateCode]) { notify("Informe uma cidade e selecione um estado válido."); return; }
+    setCityLookupLoading(true); setSelectedCity(city); setSelectedState(stateCode);
+    setLocationStatus("Localizando " + city + ", " + stateCode + "...");
+    setSearchPerformed(false); setPriceResults([]); setSelectedMapStore(null);
+    let point: { lat: number; lon: number } | null = null;
+    try { point = await geocodeCityCenter(city, stateCode); } catch { point = null; }
+    if (point) setUserLocation({ ...point, accuracy: null, precision: "city" });
+    else {
+      const localStores = stores.filter((store) => storeMatchesRegion(store, city, stateCode) && store.latitude !== null && store.longitude !== null);
+      if (localStores.length) {
+        point = {
+          lat: localStores.reduce((sum, store) => sum + Number(store.latitude), 0) / localStores.length,
+          lon: localStores.reduce((sum, store) => sum + Number(store.longitude), 0) / localStores.length,
+        };
+        setUserLocation({ ...point, accuracy: null, precision: "city" });
+      } else setUserLocation(null);
+    }
+    window.localStorage.setItem("zorvi-map-region-v1", JSON.stringify({ city, state: stateCode, ...(point || {}) }));
+    setCityFormOpen(false);
+    setLocationStatus(point ? "Centro urbano aproximado · " + city + ", " + stateCode : "Região selecionada · " + city + ", " + stateCode + ". Aguardando coordenadas dos estabelecimentos.");
+    await loadNearbyStores();
+    setCityLookupLoading(false);
+  };
+
+
   const nearbyStores = useMemo(
     () => stores
       .filter((store) => filter === "Todos" || store.category === filter)
+      .filter((store) => !selectedCity || storeMatchesRegion(store, selectedCity, selectedState))
       .map((store) => ({
         ...store,
         distance: userLocation && store.latitude !== null && store.longitude !== null
           ? distanceKm(userLocation.lat, userLocation.lon, store.latitude, store.longitude)
           : null,
       }))
-      .filter((store) => store.distance === null || store.distance <= 20)
+      .filter((store) => store.distance === null || userLocation?.precision === "city" || store.distance <= 20)
       .sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999)),
-    [stores, filter, userLocation]
+    [stores, filter, userLocation, selectedCity, selectedState]
   );
 
   const mapStores = useMemo<MapStore[]>(() => {
@@ -603,12 +713,13 @@ mapPrice: result ? Number(result.price) : null,
         (row): row is PriceResult =>
           Boolean(row.store && row.product)
           && (!products?.[0]?.category || row.store.category === products[0].category)
+          && (!selectedCity || storeMatchesRegion(row.store, selectedCity, selectedState))
           && (!userLocation || row.store!.latitude === null || row.store!.longitude === null || distanceKm(
             userLocation.lat,
             userLocation.lon,
             row.store!.latitude,
             row.store!.longitude
-          ) <= 20)
+          ) <= 20 || userLocation.precision === "city")
       );
       verifiedRows.sort((a, b) => Number(a.price) - Number(b.price));
       setPriceResults(verifiedRows);
@@ -632,12 +743,14 @@ mapPrice: result ? Number(result.price) : null,
       if (!active || !mapContainerRef.current) return;
       if (!leafletMapRef.current) {
         const map = leaflet.map(mapContainerRef.current, { zoomControl: true, scrollWheelZoom: false });
-        map.setView([-5.0892, -42.8016], 13);
+        map.setView([-14.2350, -51.9253], 4.5);
         map.on("click", (event) => {
           if (!manualLocationPickingRef.current) return;
           const latitude = Number(event.latlng.lat);
           const longitude = Number(event.latlng.lng);
           if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          setSelectedCity(""); setSelectedState(""); setCityFormOpen(false);
+          window.localStorage.removeItem("zorvi-map-region-v1");
           setUserLocation({ lat: latitude, lon: longitude, accuracy: null, precision: "manual" });
           setLocationStatus("Ponto escolhido manualmente no mapa · não é uma posição GPS.");
           manualLocationPickingRef.current = false;
@@ -667,14 +780,19 @@ mapPrice: result ? Number(result.price) : null,
 
   useEffect(() => {
     if (!mapReady || !leafletMapRef.current) return;
+    const map = leafletMapRef.current;
     if (userLocation) {
-      leafletMapRef.current.setView([userLocation.lat, userLocation.lon], userLocation.precision === "approximate" && (userLocation.accuracy || 0) > 1000 ? 12 : userLocation.precision === "approximate" ? 14 : 15);
-    } else {
-      // Without a sufficiently accurate GPS fix, show the city reference point,
-      // never a guessed device location.
-      leafletMapRef.current.setView([-5.0892, -42.8016], 13);
-    }
-  }, [mapReady, userLocation]);
+      const zoom = userLocation.precision === "city" ? 12
+        : userLocation.precision === "approximate" && (userLocation.accuracy || 0) > 1000 ? 12
+          : userLocation.precision === "approximate" ? 14 : 15;
+      map.setView([userLocation.lat, userLocation.lon], zoom);
+    } else if (selectedCity) {
+      const cityStores = stores.filter((store) => storeMatchesRegion(store, selectedCity, selectedState) && store.latitude !== null && store.longitude !== null);
+      if (cityStores.length > 1) map.fitBounds(cityStores.map((store) => [store.latitude as number, store.longitude as number]), { padding: [28, 28], maxZoom: 13 });
+      else if (cityStores.length === 1) map.setView([cityStores[0].latitude as number, cityStores[0].longitude as number], 13);
+      else map.setView([-14.2350, -51.9253], 4.5);
+    } else map.setView([-14.2350, -51.9253], 4.5);
+  }, [mapReady, userLocation, selectedCity, selectedState, stores]);
 
   useEffect(() => {
     const leaflet = window.L;
@@ -745,23 +863,31 @@ mapPrice: result ? Number(result.price) : null,
           interactive: false,
         }).addTo(markerLayer);
       }
+      const isCityReference = userLocation.precision === "city";
       const youIcon = leaflet.divIcon({
-        className: "zorvi-user-location-icon",
-        html: '<span class="zorvi-user-location-dot"><i></i></span>',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+        className: isCityReference ? "zorvi-city-reference-icon" : "zorvi-user-location-icon",
+        html: isCityReference
+          ? '<span class="zorvi-city-reference"><i></i><b>' + escapeMapHtml(selectedCity || "Centro urbano") + '</b></span>'
+          : '<span class="zorvi-user-location-dot"><i></i></span>',
+        iconSize: isCityReference ? [142, 42] : [24, 24],
+        iconAnchor: isCityReference ? [71, 21] : [12, 12],
       });
       leaflet.marker([userLocation.lat, userLocation.lon], { icon: youIcon })
         .addTo(markerLayer)
-        .bindPopup(userLocation.precision === "precise" ? "<b>GPS confirmado</b>" : userLocation.precision === "approximate" ? `<b>GPS aproximado</b><small>Margem de erro: ±${Math.round(userLocation.accuracy || 0)} m</small>` : "<b>Ponto escolhido manualmente</b>");
+        .bindPopup(isCityReference
+          ? '<b>Centro aproximado de ' + escapeMapHtml(selectedCity) + '</b><small>' + escapeMapHtml(BRAZIL_STATE_NAMES[selectedState] || selectedState) + '</small>'
+          : userLocation.precision === "precise" ? "<b>GPS confirmado</b>" : userLocation.precision === "approximate" ? '<b>GPS aproximado</b><small>Margem de erro: ±' + Math.round(userLocation.accuracy || 0) + ' m</small>' : "<b>Ponto escolhido manualmente</b>");
     }
-  }, [mapReady, mapStores, userLocation, searchPerformed, query, locationStatus, selectedMapStore]);
+  }, [mapReady, mapStores, userLocation, searchPerformed, query, locationStatus, selectedMapStore, selectedCity, selectedState]);
 
   if (isSupabaseConfigured && authLoading) return <div className="zorvi-auth-loading"><img src="/zorvi-mark.webp" alt="ZORVI"/><span>Preparando sua experiência...</span></div>;
   if (isSupabaseConfigured && !session) return <AuthScreen />;
 
   return <div className={"zorvi-app " + (dark ? "theme-dark" : "theme-light")}>
     <div className="app-shell">
+      <div className="zorvi-particle-field" aria-hidden="true">
+        {Array.from({ length: 14 }, (_, index) => <span key={index} className="zorvi-particle"/>) }
+      </div>
       <header className="topbar">
         <div><div className="brand"><img className="brand-mark-image" src="/zorvi-mark.webp" alt="Símbolo ZORVI" /><span>ZORVI</span></div><p className="tagline">Tudo se conecta. Tudo se descobre.</p></div>
         <div className="top-actions"><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Alternar tema">{dark ? <Sun size={19}/> : <Moon size={19}/>}</button><button className="icon-button" onClick={() => notify("Nenhuma notificação nova")} aria-label="Notificações"><Bell size={19}/></button><button className="avatar avatar-top" onClick={() => setTab("profile")}>{profile?.avatar_url ? <img src={profile.avatar_url} alt="Sua foto de perfil"/> : accountInitial}</button></div>
@@ -802,19 +928,28 @@ mapPrice: result ? Number(result.price) : null,
           </div>
 
           <div className="map-location-bar">
-            <div className={"map-location-indicator" + (userLocation ? " is-active" : "")} title={locationStatus}>
+            <div className={"map-location-indicator" + (userLocation || selectedCity ? " is-active" : "")} title={locationStatus}>
               <span className="map-location-indicator-dot"/>
               <span className="map-location-copy">
-                <b>{userLocation ? userLocation.precision === "precise" ? "GPS confirmado" : userLocation.precision === "approximate" ? "GPS aproximado" : "Ponto manual" : locationStatus.startsWith("Buscando") ? "Buscando GPS" : "Localização"}</b>
-                <small>{userLocation ? userLocation.precision === "manual" ? "Ponto escolhido no mapa" : "Precisão de ±" + Math.round(userLocation.accuracy || 0) + " m" : locationStatus}</small>
+                <b>{selectedCity ? "Região selecionada" : userLocation ? userLocation.precision === "precise" ? "GPS confirmado" : userLocation.precision === "approximate" ? "GPS aproximado" : "Ponto manual" : locationStatus.startsWith("Buscando") ? "Buscando GPS" : "Defina sua região"}</b>
+                <small>{selectedCity ? selectedCity + ", " + (BRAZIL_STATE_NAMES[selectedState] || selectedState) + " · centro urbano aproximado" : userLocation ? userLocation.precision === "manual" ? "Ponto escolhido no mapa" : "Precisão de ±" + Math.round(userLocation.accuracy || 0) + " m" : locationStatus}</small>
               </span>
             </div>
             <div className="map-location-actions">
               <button onClick={requestLocation}><LocateFixed size={15}/> GPS</button>
-              <button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha outro ponto."); }}>{manualLocationPicking ? "Cancelar" : "No mapa"}</button>
+              <button className={cityFormOpen ? "manual-location-active" : ""} onClick={() => setCityFormOpen((open) => !open)}><MapPin size={14}/> Cidade</button>
+              <button className={manualLocationPicking ? "manual-location-active" : ""} onClick={() => { const next = !manualLocationPicking; manualLocationPickingRef.current = next; setManualLocationPicking(next); setLocationStatus(next ? "Toque no mapa para escolher sua localização manualmente." : "Seleção manual encerrada. Use o GPS ou escolha uma cidade."); }}>{manualLocationPicking ? "Cancelar" : "No mapa"}</button>
             </div>
           </div>
-
+          {cityFormOpen && <form className="map-city-form" onSubmit={(event) => { event.preventDefault(); void saveCityRegion(); }}>
+            <div className="map-city-form-heading"><span><MapPin size={17}/></span><div><b>Onde você quer buscar?</b><small>Informe cidade e estado para encontrar estabelecimentos e preços da região.</small></div></div>
+            <div className="map-city-fields">
+              <label>Cidade<input value={cityInput} onChange={(event) => setCityInput(event.target.value)} placeholder="Ex.: Teresina" autoComplete="address-level2" required minLength={2}/></label>
+              <label>Estado<select value={stateInput} onChange={(event) => setStateInput(event.target.value)} required><option value="">UF</option>{BRAZIL_STATES.map((state) => <option key={state.code} value={state.code}>{state.code} · {state.name}</option>)}</select></label>
+            </div>
+            <button className="map-city-submit" type="submit" disabled={cityLookupLoading}>{cityLookupLoading ? <span className="map-button-loading"/> : <MapPin size={15}/>} {cityLookupLoading ? "Localizando região..." : "Usar esta localização"} <ArrowRight size={15}/></button>
+          </form>}
+          {!cityFormOpen && selectedCity && <div className="map-region-summary"><span>Buscando em <b>{selectedCity}, {selectedState}</b></span><button onClick={() => setCityFormOpen(true)}>Alterar cidade</button></div>}
           <div className="filter-row map-filter-row" aria-label="Filtrar estabelecimentos">
             {["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}</button>)}
           </div>
@@ -851,7 +986,7 @@ mapPrice: result ? Number(result.price) : null,
               <div className="place-info">
                 <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
-                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1)+" km de você"}</small>}
+                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Coordenada pendente":selectedMapStore.distance.toFixed(1) + (selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
               </div>
               <div className="map-selected-actions">
                 {selectedMapStore.website_url && <a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
@@ -863,7 +998,7 @@ mapPrice: result ? Number(result.price) : null,
             <div className="map-sheet-list">
               {mapStores.map(store=>{
                 const brand=getStoreBrand(store);
-                const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
+                const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"||userLocation?.precision==="city"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
                 const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
                 return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
                   setSelectedMapStore(store);
