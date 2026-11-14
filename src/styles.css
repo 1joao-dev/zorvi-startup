@@ -660,3 +660,40 @@
 @media(prefers-reduced-motion:reduce){
   .map-results-sheet,.zorvi-map-marker-symbol{transition:none}
 }
+
+
+/* Map feedback polish: distinguish the live user position from nearby stores. */
+.zorvi-map-frame .leaflet-tile-pane{
+  filter:invert(1) hue-rotate(180deg) saturate(.7) brightness(.92) contrast(.98)!important;
+}
+.zorvi-map-legend{
+  top:11px;
+  bottom:auto;
+  left:11px;
+  gap:8px;
+  padding:7px 9px;
+  max-width:calc(100% - 66px);
+  flex-wrap:wrap;
+  border-radius:13px;
+  font-size:8px;
+}
+.zorvi-map-legend span{
+  gap:4px;
+}
+.legend-user{
+  background:#a855f7;
+  box-shadow:0 0 0 3px #a855f733;
+}
+.zorvi-map-marker-symbol{
+  position:relative;
+  z-index:1;
+  background:var(--brand-accent);
+  border-color:#fff;
+  box-shadow:0 5px 18px #000d,0 0 0 3px #ffffff20,0 0 18px color-mix(in srgb,var(--brand-accent) 42%,transparent);
+}
+.zorvi-user-location-icon{
+  z-index:400;
+}
+@media(max-width:370px){
+  .zorvi-map-legend{gap:6px;padding:6px 7px;font-size:7px}
+}
