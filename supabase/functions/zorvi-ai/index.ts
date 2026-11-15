@@ -287,10 +287,10 @@ function buildCatalogFallback(
       + "Quando uma oferta tiver uma fonte e uma atualização confirmadas, ela poderá aparecer aqui.";
   }
 
-  const residualTerms = normalizedQuestion.split(/\\s+/).filter((token) =>
+  const residualTerms = normalizedQuestion.split(/\s+/).filter((token) =>
     token.length >= 2 && !stopWords.has(token)
   );
-  const asksForSpecificProduct = /\\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\\b/.test(normalizedQuestion)
+  const asksForSpecificProduct = /\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\b/.test(normalizedQuestion)
     && residualTerms.length > 0;
   if (asksForSpecificProduct) {
     return "Ainda não encontrei esse produto no catálogo atual. "
@@ -557,7 +557,7 @@ Deno.serve(async (request: Request) => {
       });
     }
 
-    if (/R\\$\\s*[0-9][0-9.,]*|\\b[0-9]+(?:[.,][0-9]{1,2})?\\s*(?:reais|centavos)\\b/i.test(answer)) {
+    if (/R\$\s*[0-9][0-9.,]*|\b[0-9]+(?:[.,][0-9]{1,2})?\s*(?:reais|centavos)\b/i.test(answer)) {
       return json({
         mode: "catalog",
         answer: catalogFallback,
