@@ -14,6 +14,8 @@ type Store = { id:string; name:string; category:string; address:string; city:str
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
+type ChatPriceResult = { id:string; productName:string; brand:string|null; variant:string|null; unit:string|null; storeName:string; storeCity:string; price:number; currency:string; priceType:string; sourceLabel:string; sourceUrl:string|null; observedAt:string; availabilityStatus:"available"|"unknown"; distanceKm:number|null };
+type ChatMessage = { role:"assistant"|"user"; text:string; results?:ChatPriceResult[] };
 type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; fitBounds(bounds:Array<[number,number]>,options?:Record<string,unknown>):LeafletMap; on(event:string,handler:(event:{latlng:{lat:number;lng:number}})=>void):LeafletMap; remove():void; invalidateSize():void };
 type LeafletCircle = { addTo(layer:LeafletLayerGroup):LeafletCircle };
 type LeafletLayerGroup = { clearLayers():void; addTo(map:LeafletMap):LeafletLayerGroup };
@@ -484,13 +486,64 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentSending, setCommentSending] = useState(false);
   const [message, setMessage] = useState("");
-  const [chat, setChat] = useState([{ role: "assistant", text: "Oi! ✨ Sou a ZORVI AI. Posso ajudar você a descobrir lugares, comparar opções e encontrar experiências. O que vamos explorar hoje?" }]);
+  const [chat, setChat] = useState<ChatMessage[]>([{ role: "assistant", text: "Oi! ✨ Sou a ZORVI AI. Posso ajudar você a pesquisar produtos, comparar preços verificados e descobrir estabelecimentos. O que você está procurando?" }]);
+  const [chatSending, setChatSending] = useState(false);
+  const [chatMode, setChatMode] = useState<"idle"|"ai"|"catalog"|"error">("idle");
   const [toast, setToast] = useState("");
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2300); };
-  const send = (value: string) => {
-    if (!value.trim()) return;
-    setChat((old) => [...old, { role: "user", text: value }, { role: "assistant", text: "Boa pergunta! Esta é uma prévia da ZORVI AI. Quando conectarmos os dados reais e a inteligência artificial, vou poder comparar opções perto de você. Por enquanto, explore os locais demonstrativos no mapa." }]);
+  const send = async (value: string) => {
+    const question = value.trim();
+    if (!question || chatSending) return;
+    const history = [
+      ...chat.slice(-7).map((item) => ({ role: item.role, content: item.text })),
+      { role: "user" as const, content: question },
+    ];
+    setChat((old) => [...old, { role: "user", text: question }]);
     setMessage("");
+
+    if (!supabase || !session) {
+      setChatMode("error");
+      setChat((old) => [...old, { role: "assistant", text: "Entre na sua conta para consultar o catálogo e conversar com a ZORVI AI." }]);
+      return;
+    }
+
+    setChatSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("zorvi-ai", {
+        body: {
+          messages: history,
+          location: {
+            city: selectedCity || null,
+            state: selectedState || null,
+            latitude: userLocation?.lat ?? null,
+            longitude: userLocation?.lon ?? null,
+            accuracy: userLocation?.accuracy ?? null,
+            precision: userLocation?.precision ?? null,
+          },
+        },
+      });
+      if (error) {
+        const context = (error as unknown as { context?: Response }).context;
+        const payload = context && typeof context.clone === "function"
+          ? await context.clone().json().catch(() => null)
+          : null;
+        throw new Error(payload?.error || error.message || "Não foi possível consultar a ZORVI AI.");
+      }
+      const answer = typeof data?.answer === "string" && data.answer.trim()
+        ? data.answer.trim()
+        : "Não consegui formular uma resposta agora. Tente novamente.";
+      const results = Array.isArray(data?.results) ? data.results as ChatPriceResult[] : [];
+      setChat((old) => [...old, { role: "assistant", text: answer, results }]);
+      setChatMode(data?.mode === "ai" ? "ai" : "catalog");
+    } catch (error) {
+      const detail = error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message || "")
+        : "Tente novamente em instantes.";
+      setChatMode("error");
+      setChat((old) => [...old, { role: "assistant", text: "Não consegui consultar o catálogo agora. " + detail }]);
+    } finally {
+      setChatSending(false);
+    }
   };
   const loadFeed = async () => {
     if (!supabase || !session?.user.id) return;
@@ -1322,12 +1375,12 @@ mapPrice: result ? Number(result.price) : null,
           <p className="demo-note map-demo-note">Preços só aparecem quando existe uma fonte verificável. Ainda não há integração automática com todos os sites de farmácias.</p>
         </section>}
         {tab === "ai" && <section className="screen ai-screen">
-          <div className="ai-heading"><div className="ai-orb"><img src="/zorvi-mark.webp" alt="Símbolo ZORVI" /></div><p className="eyebrow">SUA COMPANHEIRA DE DESCOBERTAS</p><h1>Olá! Eu sou a<br/><span>ZORVI AI.</span></h1><p>Uma nova forma de encontrar, comparar e descobrir o mundo ao seu redor.</p></div>
-          <div className="chat-panel"><div className="chat-top"><div className="ai-mini"><Sparkles size={16}/></div><div><b>ZORVI AI</b><small><i className="online-dot"/> Assistente demonstrativo</small></div><button className="icon-button" onClick={() => setChat([{role:"assistant",text:"Conversa reiniciada! O que você quer descobrir hoje?"}])}>•••</button></div>
-          <div className="chat-messages">{chat.map((m,i) => <div className={"chat-message " + m.role} key={i}>{m.role === "assistant" && <span className="chat-avatar"><Sparkles size={13}/></span>}<p>{m.text}</p></div>)}</div>
-          <div className="suggestion-label">EXPERIMENTE PERGUNTAR</div><div className="suggestions"><button onClick={() => send("Onde encontro um produto mais barato?")}><Wallet size={14}/> Onde encontro mais barato?</button><button onClick={() => send("Quais lugares legais existem perto de mim?")}><Compass size={14}/> Lugares legais por perto</button><button onClick={() => send("Quero descobrir promoções de hoje.")}><Zap size={14}/> Promoções de hoje</button></div>
-          <form className="chat-input" onSubmit={(e) => {e.preventDefault();send(message);}}><input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Pergunte qualquer coisa..."/><button type="submit"><Send size={18}/></button></form></div>
-          <p className="demo-note">A IA ainda não está conectada a um modelo ou dados ao vivo. Respostas demonstrativas.</p>
+          <div className="ai-heading"><div className="ai-orb"><img src="/zorvi-mark.webp" alt="Símbolo ZORVI" /></div><p className="eyebrow">SUA COMPANHEIRA DE DESCOBERTAS</p><h1>Olá! Eu sou a<br/><span>ZORVI AI.</span></h1><p>Encontre produtos, compare informações confiáveis e descubra opções na sua região.</p></div>
+          <div className="chat-panel"><div className="chat-top"><div className="ai-mini"><Sparkles size={16}/></div><div><b>ZORVI AI</b><small><i className={"online-dot " + (chatMode === "catalog" ? "catalog-dot" : chatMode === "error" ? "error-dot" : "")}/>{chatSending ? "Consultando catálogo e informações..." : chatMode === "ai" ? "IA conectada · dados reais" : chatMode === "catalog" ? "Busca real do catálogo" : chatMode === "error" ? "Conexão indisponível" : "Assistente de descobertas"}</small></div><button className="icon-button" aria-label="Reiniciar conversa" title="Reiniciar conversa" onClick={() => {setChat([{role:"assistant",text:"Conversa reiniciada! O que você quer descobrir hoje?"}]);setChatMode("idle");setMessage("");}}><MoreHorizontal size={18}/></button></div>
+          <div className="chat-messages">{chat.map((m,i) => <div className={"chat-message " + m.role} key={i}>{m.role === "assistant" && <span className="chat-avatar"><Sparkles size={13}/></span>}<p>{m.text}</p>{m.results && m.results.length > 0 && <div className="chat-result-list">{m.results.map((r) => <div className="chat-result-card" key={r.id}><div className="chat-result-copy"><b>{r.productName}</b><small>{[r.brand,r.variant,r.unit].filter(Boolean).join(" · ")}</small><small>{r.storeName} · {r.storeCity}</small><small>{r.sourceLabel} · Atualizado em {new Date(r.observedAt).toLocaleString("pt-BR")}</small>{r.distanceKm !== null && <small>{r.distanceKm.toFixed(1).replace(".",",")} km do ponto selecionado</small>}{r.sourceUrl && <a href={r.sourceUrl} target="_blank" rel="noreferrer">Consultar fonte</a>}</div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong></div>)}</div>}</div>)}{chatSending && <div className="chat-message assistant chat-thinking"><span className="chat-avatar"><Sparkles size={13}/></span><p>Estou consultando as informações disponíveis...</p></div>}</div>
+          {chat.length <= 1 && <><div className="suggestion-label">EXPERIMENTE PERGUNTAR</div><div className="suggestions"><button onClick={() => void send("Onde encontro dipirona 500 mg mais barato?")}><Wallet size={14}/> Comparar preços de um produto</button><button onClick={() => void send("Quais farmácias estão cadastradas na minha região?")}><Compass size={14}/> Estabelecimentos próximos</button><button onClick={() => void send("Quero descobrir promoções disponíveis.")}><Zap size={14}/> Promoções cadastradas</button></div></>}
+          <form className="chat-input" onSubmit={(e) => {e.preventDefault();void send(message);}}><input value={message} onChange={(e) => setMessage(e.target.value)} disabled={chatSending} placeholder="Pergunte sobre produtos, preços ou lugares..."/><button type="submit" disabled={chatSending || !message.trim()}><Send size={18}/></button></form></div>
+          <p className="demo-note">A ZORVI consulta o catálogo e os preços verificados. Informações sem confirmação são identificadas.</p>
         </section>}
         {tab === "search" && <section className="screen"><div className="screen-title"><div><p className="eyebrow">ENCONTRE SUA PRÓXIMA DESCOBERTA</p><h1>Explorar</h1><p>Produtos, lugares, preços e experiências.</p></div></div><div className="search-large"><Search size={20}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O que você está procurando?"/><button onClick={() => setQuery("")}><X size={16}/></button></div><p className="eyebrow category-label">CATEGORIAS POPULARES</p><div className="category-grid">{[{name:"Mercados",icon:ShoppingBag},{name:"Restaurantes",icon:Utensils},{name:"Farmácias",icon:Plus},{name:"Experiências",icon:Sparkles}].map((c) => {const Icon=c.icon;return <button className="category-card" key={c.name} onClick={() => {setFilter(c.name==="Mercados"?"Mercado":c.name==="Restaurantes"?"Restaurante":c.name==="Farmácias"?"Farmácia":"Todos");setTab("map");}}><span className="place-icon"><Icon size={21}/></span><b>{c.name}</b><ArrowRight size={15}/></button>;})}</div><div className="section-heading search-trends"><div><p className="eyebrow">EM ALTA NA COMUNIDADE</p><h2>Descobertas populares</h2></div></div>{["Cafés para conhecer","Economize nas compras","Descubra com a ZORVI AI"].map((t,i) => <button className="trend-row" key={t} onClick={() => setTab(i===2?"ai":"map")}><span className="trend-icon">{i===2?<Sparkles size={18}/>:<ShoppingBag size={18}/>}</span><span><b>{t}</b><small>Ideias para sua próxima descoberta</small></span><ArrowRight size={17}/></button>)}<p className="demo-note">Resultados e tendências são exemplos para demonstração.</p></section>}
         {tab === "profile" && <section className="screen"><div className="profile-top"><p className="eyebrow">SEU ESPAÇO ZORVI</p><button className="icon-button" onClick={() => notify("Configurações em breve")}><Settings2 size={20}/></button></div><div className="profile-hero"><div className="profile-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt={"Foto de " + accountName}/> : accountInitial}<span className="profile-online"/></div><h1>{accountName}</h1><p>@{profile?.username || "explorador"} · {session?.user.email || "Explorador ZORVI"}</p>{profile?.bio && <p className="profile-bio">{profile.bio}</p>}<button className="edit-profile" onClick={openProfileEditor}>Editar perfil</button></div><div className="stats-row"><div><b>12</b><small>Publicações</small></div><div><b>248</b><small>Seguidores</small></div><div><b>186</b><small>Seguindo</small></div></div><div className="profile-menu"><button onClick={() => notify(saved.length + " itens salvos nesta sessão")}><Bookmark size={19}/><span><b>Itens salvos</b><small>Suas descobertas favoritas</small></span><ArrowRight size={17}/></button><button onClick={() => notify("Suas avaliações aparecerão aqui")}><Heart size={19}/><span><b>Avaliações</b><small>Compartilhe suas experiências</small></span><ArrowRight size={17}/></button><button onClick={() => setDark(!dark)}>{dark?<Sun size={19}/>:<Moon size={19}/>}<span><b>Aparência</b><small>{dark?"Tema escuro ativado":"Tema claro ativado"}</small></span><span className={"toggle-pill " + (dark?"on":"")}/></button><button onClick={() => notify("Preferências em breve")}><Settings2 size={19}/><span><b>Configurações</b><small>Privacidade e preferências</small></span><ArrowRight size={17}/></button>{session && <button onClick={signOut}><UserRound size={19}/><span><b>Sair da conta</b><small>Encerrar sua sessão com segurança</small></span><ArrowRight size={17}/></button>}</div><div className="profile-invite"><Sparkles size={19}/><div><b>Convide sua comunidade</b><small>Descobertas ficam melhores quando compartilhadas.</small></div><button onClick={() => notify("Convite copiado (demonstração)")}><Share2 size={17}/></button></div><p className="demo-note">{session ? "Conta conectada com Supabase." : "Modo demonstração. Configure o Supabase para ativar contas reais."}</p></section>}
