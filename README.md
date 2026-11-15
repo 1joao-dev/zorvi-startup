@@ -60,3 +60,19 @@ Nunca coloque a `service_role` key no frontend. Use somente a chave pública ano
 4. Fontes verificadas para preços, estabelecimentos e promoções.
 
 **Importante:** locais, distâncias, publicações e respostas exibidos na versão inicial são demonstrativos e não representam ofertas ou informações verificadas.
+
+## Google Places: referência de estabelecimentos
+
+A função `geocode-stores` usa o Places API (New) para associar cada unidade a um `place_id` do Google. Somente o Place ID e o estado operacional da verificação são persistidos. Os nomes, endereços e coordenadas retornados pelo Google não são armazenados.
+
+O mapa principal continua usando MapLibre/OpenStreetMap; suas coordenadas são obtidas pelo Photon ou por correção manual. O Place ID gera um link que abre a unidade correspondente no Google Maps.
+
+Para habilitar a associação:
+
+1. Ative **Places API (New)** no Google Cloud e configure o faturamento e limites de uso.
+2. Crie uma chave restrita à Places API (New).
+3. Cadastre a chave como Secret de Edge Functions no Supabase, com o nome `GOOGLE_MAPS_API_KEY`.
+4. Nunca coloque essa chave no frontend, no arquivo `.env` público ou no GitHub.
+5. Antes de disponibilizar a integração ao público, publique Termos de Uso e Política de Privacidade compatíveis com os requisitos do Google Maps Platform.
+
+A verificação é executada em lotes de cinco unidades e evita repetir consultas por 30 dias.
