@@ -179,7 +179,7 @@ function googlePlaceScore(place: GooglePlaceRecord, store: StoreRow) {
 
   const expectedNames = [
     store.brand_name,
-    store.name.split(/\\s[-–—]\\s/)[0],
+    store.name.split(/\s[-–—]\s/)[0],
     store.name.split(",")[0],
   ].filter((value): value is string => Boolean(value)).map(normalize).filter((value) => value.length >= 3);
   const nameMatches = expectedNames.some((expected) =>
@@ -247,7 +247,7 @@ function googlePlaceScore(place: GooglePlaceRecord, store: StoreRow) {
 
 async function searchGooglePlace(store: StoreRow, apiKey: string): Promise<GooglePlaceRecord[]> {
   const state = STATE_NAMES[normalize(store.state)] || store.state;
-  const businessName = store.brand_name || store.name.split(/\\s[-–—]\\s/)[0] || store.name;
+  const businessName = store.brand_name || store.name.split(/\s[-–—]\s/)[0] || store.name;
   const textQuery = [businessName, store.address, store.city, state, "Brasil"].filter(Boolean).join(", ");
   const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
