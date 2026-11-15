@@ -1082,26 +1082,22 @@ mapPrice: result ? Number(result.price) : null,
       if (store.latitude === null || store.longitude === null) return;
       const brand = getStoreBrand(store);
       const hasPrice = typeof store.mapPrice === "number";
-      const isWideLogo = brand.slug === "mix-atacarejo";
       const logoUrl = store.brand_logo_url && /^https?:\/\//i.test(store.brand_logo_url)
         ? escapeMapHtml(store.brand_logo_url)
-        : isWideLogo
-          ? "https://raw.githubusercontent.com/joaosystemss/startup-em-movimento/main/public/brands/mix-mateus.png"
-          : "";
+        : "";
       const logoMarkup = logoUrl
         ? `<img src="${logoUrl}" alt="${escapeMapHtml(brand.name)}" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />`
         : "";
       const selectedClass = selectedMapStore?.id === store.id ? " is-selected" : "";
-      const wideLogoClass = isWideLogo ? " is-wide-logo" : "";
-      const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}${wideLogoClass}${selectedClass}" style="--brand-accent:${brand.color}">
+      const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}${selectedClass}" style="--brand-accent:${brand.color}">
         <span class="zorvi-map-marker-symbol"><b>${escapeMapHtml(brand.initials)}</b>${logoMarkup}</span>
         ${searchPerformed ? `<span class="zorvi-map-marker-price ${hasPrice ? "is-price" : "no-price"}">${hasPrice ? `${store.mapPriceType === "estimated" ? "≈ " : ""}${formatMapPrice(store.mapPrice as number)}` : "Sem preço"}</span>` : ""}
       </div>`;
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
         html: markerHtml,
-        iconSize: searchPerformed ? [isWideLogo ? 128 : 116, 40] : [isWideLogo ? 64 : 38, 40],
-        iconAnchor: searchPerformed ? [isWideLogo ? 30 : 18, 20] : [isWideLogo ? 32 : 19, 38],
+        iconSize: searchPerformed ? [116, 40] : [38, 40],
+        iconAnchor: searchPerformed ? [18, 20] : [19, 38],
         popupAnchor: [0, searchPerformed ? -22 : -35],
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon, zIndexOffset: 500 }).addTo(markerLayer);
