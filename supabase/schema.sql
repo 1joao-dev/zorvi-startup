@@ -142,7 +142,6 @@ create unique index if not exists stores_name_address_city_state_unique on publi
 create index if not exists stores_brand_slug_idx on public.stores(brand_slug);
 
 -- Google Places: guarda somente o Place ID isento das restrições de cache.
--- Armazena somente o Place ID do Google, isento das restrições de cache.
 alter table public.stores
   add column if not exists google_place_id text,
   add column if not exists google_match_status text,
