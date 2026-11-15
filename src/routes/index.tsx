@@ -139,6 +139,14 @@ function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"catego
   return {name,slug,initials,color};
 }
 
+function getStoreBrandLogo(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category"|"brand_logo_url">){
+  const brand=getStoreBrand(store);
+  // Mix uses the bundled icon so its marker never depends on a remote image URL or stale DB cache.
+  if(brand.slug==="mix-atacarejo") return "/brands/mix-mateus-icon.png?v=2";
+  const logoUrl=store.brand_logo_url?.trim()||"";
+  return /^https?:\/\//i.test(logoUrl) ? logoUrl : "";
+}
+
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const radians = (value: number) => value * Math.PI / 180;
   const latitudeDelta = radians(lat2 - lat1);
@@ -1082,11 +1090,9 @@ mapPrice: result ? Number(result.price) : null,
       if (store.latitude === null || store.longitude === null) return;
       const brand = getStoreBrand(store);
       const hasPrice = typeof store.mapPrice === "number";
-      const logoUrl = store.brand_logo_url && /^https?:\/\//i.test(store.brand_logo_url)
-        ? escapeMapHtml(store.brand_logo_url)
-        : "";
+      const logoUrl = getStoreBrandLogo(store);
       const logoMarkup = logoUrl
-        ? `<img src="${logoUrl}" alt="${escapeMapHtml(brand.name)}" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />`
+        ? `<img src="${escapeMapHtml(logoUrl)}" alt="${escapeMapHtml(brand.name)}" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />`
         : "";
       const selectedClass = selectedMapStore?.id === store.id ? " is-selected" : "";
       const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}${selectedClass}" style="--brand-accent:${brand.color}">
@@ -1251,7 +1257,7 @@ mapPrice: result ? Number(result.price) : null,
             </div>
 
             {selectedMapStore && <div className="map-selected-store">
-              <span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}><b>{getStoreBrand(selectedMapStore).initials}</b>{selectedMapStore.brand_logo_url&&<img src={selectedMapStore.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
+              <span className="store-brand-mini" style={{"--brand-accent":getStoreBrand(selectedMapStore).color} as CSSProperties}><b>{getStoreBrand(selectedMapStore).initials}</b>{getStoreBrandLogo(selectedMapStore)&&<img src={getStoreBrandLogo(selectedMapStore)} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
               <div className="place-info">
                 <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
@@ -1267,6 +1273,7 @@ mapPrice: result ? Number(result.price) : null,
             <div className="map-sheet-list">
               {mapStores.map(store=>{
                 const brand=getStoreBrand(store);
+                const logoUrl=getStoreBrandLogo(store);
                 const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"||userLocation?.precision==="city"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
                 const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
                 return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
@@ -1274,7 +1281,7 @@ mapPrice: result ? Number(result.price) : null,
                   setMapSheetExpanded(true);
                   if(store.latitude!==null&&store.longitude!==null)leafletMapRef.current?.setView([store.latitude,store.longitude],16);
                 }}>
-                  <span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}><b>{brand.initials}</b>{store.brand_logo_url&&<img src={store.brand_logo_url} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
+                  <span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}><b>{brand.initials}</b>{logoUrl&&<img src={logoUrl} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
                   <span className="place-info"><b>{store.brand_name||store.name}</b><small>{store.address} · {store.city}</small></span>
                   <span className="map-store-metric">{metric}</span>
                   <ArrowRight size={15}/>
