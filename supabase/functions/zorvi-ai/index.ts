@@ -175,7 +175,7 @@ const stopWords = new Set([
   "desconto", "descontos", "hoje", "agora", "por", "favor", "para", "com", "sem",
   "uma", "umas", "uns", "que", "como", "posso", "pode", "vocês", "voces", "tem",
   "farmacia", "farmacias", "mercado", "supermercado", "supermercados", "estabelecimento",
-  "estabelecimentos", "cidade", "bairro", "aqui", "regiao", "regiao",
+  "estabelecimentos", "cidade", "bairro", "aqui", "regiao", "cadastrada", "cadastradas", "cadastrado", "cadastrados", "estao", "aberta", "abertas", "aberto", "abertos", "minha", "minhas", "na", "nas", "no", "nos", "ola", "oi", "tudo", "bem", "obrigado", "obrigada", "ajuda", "ajudar", "achar", "descobrir",
 ]);
 
 function findMatchingProducts(question: string, products: ProductRow[]): ProductRow[] {
@@ -282,9 +282,23 @@ function buildCatalogFallback(
       + "Quando houver preços confirmados, poderei comparar as opções.";
   }
 
-  if (asksForOffers && results.length > 0) {
-    return "Encontrei " + results.length + " preço(s) verificado(s) no catálogo. "
-      + "Posso comparar melhor se você disser qual produto procura.";
+  if (asksForOffers) {
+    return "Ainda não há promoções ou preços verificados disponíveis para mostrar no catálogo consultado. "
+      + "Quando uma oferta tiver uma fonte e uma atualização confirmadas, ela poderá aparecer aqui.";
+  }
+
+  const residualTerms = normalizedQuestion.split(/\\s+/).filter((token) =>
+    token.length >= 2 && !stopWords.has(token)
+  );
+  const asksForSpecificProduct = /\\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\\b/.test(normalizedQuestion)
+    && residualTerms.length > 0;
+  if (asksForSpecificProduct) {
+    return "Ainda não encontrei esse produto no catálogo atual. "
+      + "Tente informar o nome, a marca ou a apresentação exata para eu conferir novamente.";
+  }
+
+  if (asksForStores && !location.city && !hasReliableDistance(location)) {
+    return "Para indicar estabelecimentos próximos, preciso que você selecione sua cidade e estado ou permita uma localização precisa.";
   }
 
   if (asksForStores && stores.length > 0) {
@@ -293,6 +307,10 @@ function buildCatalogFallback(
       + (location.city ? " em " + location.city : " no catálogo") + ". "
       + "Alguns cadastrados: " + storeList + ". "
       + "A busca por distância só fica disponível quando a localização tem precisão suficiente.";
+  }
+
+  if (asksForStores && location.city && stores.length === 0) {
+    return "Ainda não encontrei estabelecimentos verificados cadastrados em " + location.city + ".";
   }
 
   if (products.length > 0) {
