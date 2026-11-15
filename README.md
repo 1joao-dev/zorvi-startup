@@ -8,7 +8,7 @@ A ZORVI é uma experiência social mobile-first para descobrir pessoas, estabele
 
 - **Início:** feed da comunidade, publicações demonstrativas, curtidas, favoritos e criação de post.
 - **Mapa:** base vetorial escura, geolocalização, filtros por categoria, marcadores agrupados e pesquisa de preços.
-- **ZORVI AI:** interface de chat com sugestões de perguntas e respostas de demonstração.
+- **ZORVI AI:** chat conectado à Edge Function `zorvi-ai`, com consulta ao catálogo real e aos preços verificados; usa o Lovable AI Gateway no servidor quando a chave do projeto está disponível e mantém busca direta do catálogo como fallback.
 - **Explorar:** categorias e atalhos para descobertas.
 - **Perfil:** perfil demonstrativo, itens salvos e alternância entre tema escuro e claro.
 
@@ -56,10 +56,10 @@ Nunca coloque a `service_role` key no frontend. Use somente a chave pública ano
 
 1. Persistência de publicações, curtidas e comentários no Supabase.
 2. Ampliar a cobertura de geocodificação e a precisão das coordenadas dos estabelecimentos.
-3. Gateway seguro de IA para o chat ZORVI AI.
-4. Fontes verificadas para preços, estabelecimentos e promoções.
+3. Ampliar o catálogo com fontes verificadas de preços, estabelecimentos e promoções.
+4. Adicionar histórico persistente de conversas da ZORVI AI, com controles de privacidade.
 
-**Importante:** locais, distâncias, publicações e respostas exibidos na versão inicial são demonstrativos e não representam ofertas ou informações verificadas.
+**Importante:** o chat ZORVI AI consulta o catálogo e só utiliza preços verificados dos últimos 30 dias. Quando não há preço confirmado, o agente informa a limitação. O histórico de conversa ainda fica apenas na sessão atual. Alguns conteúdos de feed e elementos de demonstração ainda não representam dados comerciais verificados.
 
 ## Google Places: referência de estabelecimentos
 
