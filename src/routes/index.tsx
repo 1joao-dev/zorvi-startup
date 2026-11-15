@@ -10,7 +10,7 @@ type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
-type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null };
+type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_maps_uri:string|null; google_formatted_address:string|null; google_business_status:string|null; google_granularity:string|null; google_match_status:string|null; google_match_confidence:number|null; google_checked_at:string|null; google_verified_at:string|null };
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
@@ -720,7 +720,7 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
     try {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at")
+        .select("id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_maps_uri,google_formatted_address,google_business_status,google_granularity,google_match_status,google_match_confidence,google_checked_at,google_verified_at")
         .eq("verification_status", "verified")
         .limit(500);
       if (error) throw error;
@@ -816,22 +816,26 @@ mapPrice: result ? Number(result.price) : null,
   }, [mapStores]);
   const mapLocatedCount = mapStores.filter(store => store.latitude !== null && store.longitude !== null).length;
   const mapPendingCount = mapStores.length - mapLocatedCount;
+  const mapGoogleVerifiedCount = mapStores.filter(store => store.google_match_status === "verified").length;
+  const mapGooglePendingCount = mapStores.length - mapGoogleVerifiedCount;
 
-  const geocodeStores = useCallback(async (silent = false) => {
+  const geocodeStores = useCallback(async (silent = false, mode: "missing" | "verify" = "missing") => {
     if (!supabase || geocodingStores) return;
     setGeocodingStores(true);
     try {
       let totalUpdated = 0;
       let totalProcessed = 0;
       let totalNotLocated = 0;
+      let totalVerified = 0;
+      let totalReviewRequired = 0;
+      let totalNotFound = 0;
       let totalFailed = 0;
       let previousRemaining = Number.POSITIVE_INFINITY;
 
-      // Each Edge Function call processes a rate-limited batch of five addresses.
-      // Sequential batches let the map fill itself without requiring a manual action.
+      // Processa cinco estabelecimentos por chamada para respeitar os limites das APIs.
       for (let round = 0; round < 10; round += 1) {
         const { data, error } = await supabase.functions.invoke("geocode-stores", {
-          body: { category: filter === "Todos" ? null : filter },
+          body: { category: filter === "Todos" ? null : filter, mode },
         });
         if (error) {
           let detail = error.message || "Não foi possível localizar as lojas.";
@@ -847,6 +851,9 @@ mapPrice: result ? Number(result.price) : null,
         const remaining = Number(data?.remaining || 0);
         totalProcessed += processed;
         totalUpdated += Number(data?.updated || 0);
+        totalVerified += Number(data?.verified || 0);
+        totalReviewRequired += Array.isArray(data?.reviewRequired) ? data.reviewRequired.length : 0;
+        totalNotFound += Array.isArray(data?.notFound) ? data.notFound.length : 0;
         totalNotLocated += Array.isArray(data?.notLocated) ? data.notLocated.length : 0;
         totalFailed += Array.isArray(data?.failed) ? data.failed.length : 0;
 
@@ -856,7 +863,9 @@ mapPrice: result ? Number(result.price) : null,
 
       await loadNearbyStores();
       if (!silent) {
-        if (totalUpdated > 0) {
+        if (mode === "verify") {
+          notify(`Google: ${totalVerified} confirmados, ${totalReviewRequired} para revisão, ${totalNotFound} sem correspondência e ${totalFailed} falhas.`);
+        } else if (totalUpdated > 0) {
           notify(`${totalUpdated} lojas receberam coordenadas. ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
         } else {
           notify(`Foram verificadas ${totalProcessed} lojas. Nenhuma coordenada foi confirmada; ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
@@ -904,7 +913,7 @@ mapPrice: result ? Number(result.price) : null,
 
       const { data, error: priceError } = await supabase
         .from("price_observations")
-        .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at),products(id,name,brand,variant,unit,category)")
+        .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_maps_uri,google_formatted_address,google_business_status,google_granularity,google_match_status,google_match_confidence,google_checked_at,google_verified_at),products(id,name,brand,variant,unit,category)")
         .in("product_id", productIds)
         .eq("verification_status", "verified")
         .gte("observed_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
@@ -1110,7 +1119,9 @@ mapPrice: result ? Number(result.price) : null,
       const priceMarkup = hasPrice
         ? `<strong class="zorvi-popup-price">${store.mapPriceType === "estimated" ? "Estimativa · " : "Preço verificado · "}${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
         : searchPerformed ? '<strong class="zorvi-popup-no-price">Preço não confirmado</strong>' : "";
-      const coordinateMarkup = store.coordinate_precision === "street" ? "<small>Localização aproximada na via</small>" : store.coordinate_precision === "address" ? "<small>Endereço geocodificado</small>" : "";
+      const coordinateMarkup = store.google_match_status === "verified"
+        ? `<small>Google Maps confirmado · ${escapeMapHtml(store.google_granularity || "ponto do estabelecimento")}</small>`
+        : store.coordinate_precision === "street" ? "<small>Localização aproximada na via</small>" : store.coordinate_precision === "address" ? "<small>Endereço geocodificado</small>" : "";
       const updatedMarkup = store.mapPriceObservedAt
         ? `<small>Atualizado em ${escapeMapHtml(new Date(store.mapPriceObservedAt).toLocaleString("pt-BR"))}</small>`
         : "";
@@ -1249,11 +1260,11 @@ mapPrice: result ? Number(result.price) : null,
                 <p className="eyebrow">{searchPerformed ? "RESULTADOS DA BUSCA" : selectedCity ? "REGIÃO SELECIONADA" : userLocation ? "AO SEU REDOR" : "ESTABELECIMENTOS CADASTRADOS"}</p>
                 <h2>{mapStores.length} {mapStores.length === 1 ? "estabelecimento" : "estabelecimentos"}</h2>
               </div>
-              <button className="map-sheet-refresh" onClick={() => void loadNearbyStores()}><RefreshCw size={14}/> Atualizar</button>
+              <button className="map-sheet-refresh" onClick={() => void geocodeStores(false, "verify")} disabled={geocodingStores}><MapPin size={14}/> {geocodingStores ? "Validando..." : "Validar Google"}</button>
             </div>
             <div className="map-sheet-summary">
               <span><b>{mapLocatedCount}</b> no mapa{mapPendingCount > 0 ? " · " + mapPendingCount + " aguardando localização" : " · todos localizados"}</span>
-              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter}</span>}
+              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter} · Google {mapGoogleVerifiedCount}/{mapStores.length}</span>}
             </div>
 
             {selectedMapStore && <div className="map-selected-store">
@@ -1261,10 +1272,12 @@ mapPrice: result ? Number(result.price) : null,
               <div className="place-info">
                 <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
-                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null?"Localização pendente":selectedMapStore.distance.toFixed(1) + (userLocation?.precision==="city" && selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
+                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceType==="estimated"?"Estimativa · ":"Preço confirmado · "}{formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null ? (selectedMapStore.latitude!==null && selectedMapStore.longitude!==null ? "Coordenadas cadastradas" : "Localização pendente") : selectedMapStore.distance.toFixed(1) + (userLocation?.precision==="city" && selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
+                {selectedMapStore.google_match_status === "verified" && <small>Google Maps confirmado · {selectedMapStore.google_granularity || "ponto do estabelecimento"}</small>}
               </div>
               <div className="map-selected-actions">
                 {selectedMapStore.website_url && <a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
+                {selectedMapStore.google_maps_uri && <a href={selectedMapStore.google_maps_uri} target="_blank" rel="noreferrer">Google Maps</a>}
                 {selectedMapStore.latitude !== null && selectedMapStore.longitude !== null && <a href={`https://www.google.com/maps/dir/?api=1&destination=${selectedMapStore.latitude},${selectedMapStore.longitude}`} target="_blank" rel="noreferrer">Rotas</a>}
               </div>
               <button className="map-selected-close" onClick={()=>setSelectedMapStore(null)} aria-label="Fechar detalhes"><X size={15}/></button>
@@ -1274,7 +1287,7 @@ mapPrice: result ? Number(result.price) : null,
               {mapStores.map(store=>{
                 const brand=getStoreBrand(store);
                 const logoUrl=getStoreBrandLogo(store);
-                const distanceLabel=store.distance===null?"Coordenada pendente":(userLocation?.precision==="approximate"||userLocation?.precision==="city"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
+                const distanceLabel=store.latitude===null||store.longitude===null?"Coordenada pendente":store.distance===null?"Coordenadas cadastradas":(userLocation?.precision==="approximate"||userLocation?.precision==="city"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
                 const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
                 return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
                   setSelectedMapStore(store);
@@ -1295,6 +1308,9 @@ mapPrice: result ? Number(result.price) : null,
             {mapStores.some(store=>store.latitude===null||store.longitude===null)&&<div className="map-coordinate-note">
               <span>{geocodingStores ? "Buscando coordenadas automaticamente pelos endereços..." : mapStores.filter(store=>store.latitude===null||store.longitude===null).length + " lojas ainda aguardam uma localização confiável."}</span>
               <button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Tentar novamente"}</button>
+            </div>}
+            {mapGooglePendingCount > 0 && <div className="map-coordinate-note">
+              <span>{geocodingStores ? "Conferindo nome, endereço e coordenadas com o Google Maps..." : mapGooglePendingCount + " estabelecimento(s) ainda não foram validados pelo Google."}</span>
             </div>}
           </section>
 
