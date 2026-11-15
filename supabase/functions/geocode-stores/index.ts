@@ -193,7 +193,7 @@ function googlePlaceScore(place: GooglePlaceRecord, store: StoreRow) {
   );
 
   const resultNumber = normalize(googleComponent(components, "street_number"))
-    || normalize(formattedAddress.match(/(?:^|,\\s*)(\\d{1,6}[a-z]?)(?:\\b|,|\\s|-)/i)?.[1] || "");
+    || normalize(formattedAddress.match(/(?:^|,\s*)(\d{1,6}[a-z]?)(?:\b|,|\s|-)/i)?.[1] || "");
   const numberMatches = Boolean(number && resultNumber && number === resultNumber);
   const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
 
