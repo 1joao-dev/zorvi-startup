@@ -864,7 +864,7 @@ mapPrice: result ? Number(result.price) : null,
       await loadNearbyStores();
       if (!silent) {
         if (mode === "verify") {
-          notify(`Google: ${totalVerified} confirmados, ${totalReviewRequired} para revisão, ${totalNotFound} sem correspondência e ${totalFailed} falhas.`);
+          notify(`Google Maps: ${totalVerified} vínculos criados, ${totalReviewRequired} para revisão, ${totalNotFound} sem correspondência e ${totalFailed} falhas.`);
         } else if (totalUpdated > 0) {
           notify(`${totalUpdated} lojas receberam coordenadas. ${totalNotLocated} sem correspondência e ${totalFailed} falhas temporárias.`);
         } else {
@@ -1264,7 +1264,7 @@ mapPrice: result ? Number(result.price) : null,
             </div>
             <div className="map-sheet-summary">
               <span><b>{mapLocatedCount}</b> no mapa{mapPendingCount > 0 ? " · " + mapPendingCount + " aguardando localização" : " · todos localizados"}</span>
-              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter} · Google {mapGoogleVerifiedCount}/{mapStores.length}</span>}
+              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter} · Google Maps {mapGoogleVerifiedCount}/{mapStores.length} vinculados</span>}
             </div>
 
             {selectedMapStore && <div className="map-selected-store">
@@ -1310,7 +1310,7 @@ mapPrice: result ? Number(result.price) : null,
               <button onClick={()=>void geocodeStores()} disabled={geocodingStores||mapStores.every(store=>store.latitude!==null&&store.longitude!==null)}>{geocodingStores?"Localizando...":"Tentar novamente"}</button>
             </div>}
             {mapGooglePendingCount > 0 && <div className="map-coordinate-note">
-              <span>{geocodingStores ? "Conferindo nome, endereço e coordenadas com o Google Maps..." : mapGooglePendingCount + " estabelecimento(s) ainda não foram validados pelo Google."}</span>
+              <span>{geocodingStores ? "Conferindo nome, endereço e coordenadas com o Google Maps..." : mapGooglePendingCount + " estabelecimento(s) ainda não têm uma referência confirmada no Google Maps."}</span>
             </div>}
           </section>
 
