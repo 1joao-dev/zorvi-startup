@@ -175,7 +175,7 @@ const stopWords = new Set([
   "desconto", "descontos", "hoje", "agora", "por", "favor", "para", "com", "sem",
   "uma", "umas", "uns", "que", "como", "posso", "pode", "vocês", "voces", "tem",
   "farmacia", "farmacias", "mercado", "supermercado", "supermercados", "estabelecimento",
-  "estabelecimentos", "cidade", "bairro", "aqui", "regiao", "cadastrada", "cadastradas", "cadastrado", "cadastrados", "estao", "aberta", "abertas", "aberto", "abertos", "minha", "minhas", "na", "nas", "no", "nos", "ola", "oi", "tudo", "bem", "obrigado", "obrigada", "ajuda", "ajudar", "achar", "descobrir", "existem", "catalogo", "catalogos", "lista", "listar", "mostre", "mostrar",
+  "estabelecimentos", "cidade", "bairro", "aqui", "regiao", "cadastrada", "cadastradas", "cadastrado", "cadastrados", "estao", "aberta", "abertas", "aberto", "abertos", "minha", "minhas", "na", "nas", "no", "nos", "ola", "oi", "tudo", "bem", "obrigado", "obrigada", "ajuda", "ajudar", "achar", "descobrir", "existem", "catalogo", "catalogos", "lista", "listar", "mostre", "mostrar", "comparar", "algo", "algum", "alguma", "coisa", "qualquer",
 ]);
 
 function findMatchingProducts(question: string, products: ProductRow[]): ProductRow[] {
@@ -305,8 +305,11 @@ function buildCatalogFallback(
   const residualTerms = normalizedQuestion.split(/\s+/).filter((token) =>
     token.length >= 2 && !stopWords.has(token)
   );
-  const asksForSpecificProduct = /\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\b/.test(normalizedQuestion)
-    && residualTerms.length > 0;
+  const hasProductSearchIntent = /\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\b/.test(normalizedQuestion);
+  if (hasProductSearchIntent && residualTerms.length === 0) {
+    return "Claro! Qual produto você quer pesquisar? Se souber, informe também a marca e a apresentação.";
+  }
+  const asksForSpecificProduct = hasProductSearchIntent && residualTerms.length > 0;
   if (asksForSpecificProduct) {
     return "Ainda não encontrei esse produto no catálogo atual. "
       + "Tente informar o nome, a marca ou a apresentação exata para eu conferir novamente.";
