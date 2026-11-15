@@ -523,8 +523,10 @@ Deno.serve(async (request: Request) => {
           verified += 1;
         } else {
           const { error: statusError } = await admin.from("stores").update({
+            google_place_id: null,
             google_match_status: result.status,
             google_checked_at: now,
+            google_verified_at: null,
           }).eq("id", store.id);
           if (statusError) throw statusError;
           if (result.status === "needs_review") reviewRequired.push(store.name);
