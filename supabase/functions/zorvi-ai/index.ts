@@ -175,7 +175,7 @@ const stopWords = new Set([
   "desconto", "descontos", "hoje", "agora", "por", "favor", "para", "com", "sem",
   "uma", "umas", "uns", "que", "como", "posso", "pode", "vocês", "voces", "tem",
   "farmacia", "farmacias", "mercado", "supermercado", "supermercados", "estabelecimento",
-  "estabelecimentos", "cidade", "bairro", "aqui", "regiao", "cadastrada", "cadastradas", "cadastrado", "cadastrados", "estao", "aberta", "abertas", "aberto", "abertos", "minha", "minhas", "na", "nas", "no", "nos", "ola", "oi", "tudo", "bem", "obrigado", "obrigada", "ajuda", "ajudar", "achar", "descobrir",
+  "estabelecimentos", "cidade", "bairro", "aqui", "regiao", "cadastrada", "cadastradas", "cadastrado", "cadastrados", "estao", "aberta", "abertas", "aberto", "abertos", "minha", "minhas", "na", "nas", "no", "nos", "ola", "oi", "tudo", "bem", "obrigado", "obrigada", "ajuda", "ajudar", "achar", "descobrir", "existem", "catalogo", "catalogos", "lista", "listar", "mostre", "mostrar",
 ]);
 
 function findMatchingProducts(question: string, products: ProductRow[]): ProductRow[] {
@@ -282,9 +282,22 @@ function buildCatalogFallback(
       + "Quando houver preços confirmados, poderei comparar as opções.";
   }
 
+  if (asksForOffers && results.length > 0) {
+    return "Encontrei " + results.length + " oferta(s) com preço verificado no catálogo. "
+      + "Os cartões abaixo mostram os valores, estabelecimentos, fontes e datas de atualização.";
+  }
   if (asksForOffers) {
     return "Ainda não há promoções ou preços verificados disponíveis para mostrar no catálogo consultado. "
       + "Quando uma oferta tiver uma fonte e uma atualização confirmadas, ela poderá aparecer aqui.";
+  }
+
+  const asksForProductList = /\b(produto|produtos|catalogo|lista|listar)\b/.test(normalizedQuestion)
+    && /\b(quais|lista|listar|catalogo|existem|temos|cadastrados|cadastradas|mostre|mostrar)\b/.test(normalizedQuestion);
+  if (asksForProductList) {
+    return products.length
+      ? "Atualmente, o catálogo da ZORVI contém: " + products.slice(0, 12).map((product) => product.name).join("; ") + ". "
+        + "A presença no catálogo não significa que exista preço ou estoque confirmado."
+      : "Ainda não há produtos cadastrados no catálogo consultado.";
   }
 
   const residualTerms = normalizedQuestion.split(/\s+/).filter((token) =>
