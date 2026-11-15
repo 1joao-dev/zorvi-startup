@@ -25,28 +25,18 @@ type GeoPoint = {
   longitude: number;
   precision: "address" | "street";
   source: string;
-  googlePlaceId?: string;
-  googleMapsUri?: string | null;
-  googleFormattedAddress?: string | null;
-  googleBusinessStatus?: string | null;
-  googleGranularity?: string | null;
-  googleMatchConfidence?: number | null;
 };
 
 type GooglePlaceRecord = {
   id?: string;
   displayName?: { text?: string };
   formattedAddress?: string;
-  location?: { latitude?: number; longitude?: number };
   addressComponents?: Array<{ longText?: string; shortText?: string; types?: string[] }>;
-  businessStatus?: string;
-  googleMapsUri?: string;
 };
 
 type GoogleVerificationResult = {
   status: "verified" | "needs_review" | "not_found";
-  point?: GeoPoint;
-  confidence?: number;
+  placeId?: string;
   reason?: string;
 };
 
@@ -194,7 +184,6 @@ function googlePlaceScore(place: GooglePlaceRecord, store: StoreRow) {
 
   const resultNumber = normalize(googleComponent(components, "street_number"))
     || normalize(formattedAddress.match(/(?:^|,\s*)(\d{1,6}[a-z]?)(?:\b|,|\s|-)/i)?.[1] || "");
-  const numberMatches = Boolean(number && resultNumber && number === resultNumber);
   const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
 
   const city = googleComponent(components, "locality")
@@ -217,34 +206,22 @@ function googlePlaceScore(place: GooglePlaceRecord, store: StoreRow) {
     || normalizedCountry === "brasil"
     || normalizedCountry === "brazil";
 
-  const location = place.location || {};
-  const latitude = Number(location.latitude);
-  const longitude = Number(location.longitude);
-  const validCoordinates = isValidPoint(latitude, longitude);
-
   const score = (nameMatches ? 35 : 0)
     + (streetMatches ? 35 : 0)
-    + (numberMatches ? 20 : number && !resultNumber ? 10 : 0)
+    + (number && !resultNumber ? 10 : number && resultNumber === number ? 20 : 0)
     + (cityMatches ? 5 : 0)
     + (stateMatches ? 3 : 0)
     + (countryMatches ? 2 : 0);
 
   const valid = nameMatches && streetMatches && cityMatches && stateMatches
-    && countryMatches && !numberConflict && validCoordinates;
+    && countryMatches && !numberConflict && Boolean(place.id);
 
   return {
     valid,
     score,
-    latitude,
-    longitude,
     placeId: String(place.id || ""),
-    displayName: String(place.displayName?.text || ""),
-    formattedAddress,
-    googleMapsUri: place.googleMapsUri ? String(place.googleMapsUri) : null,
-    businessStatus: place.businessStatus ? String(place.businessStatus) : null,
   };
 }
-
 async function searchGooglePlace(store: StoreRow, apiKey: string): Promise<GooglePlaceRecord[]> {
   const state = STATE_NAMES[normalize(store.state)] || store.state;
   const businessName = store.brand_name || store.name.split(/\s[-–—]\s/)[0] || store.name;
@@ -254,7 +231,7 @@ async function searchGooglePlace(store: StoreRow, apiKey: string): Promise<Googl
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.businessStatus,places.googleMapsUri",
+      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.addressComponents",
     },
     body: JSON.stringify({
       textQuery,
@@ -270,47 +247,6 @@ async function searchGooglePlace(store: StoreRow, apiKey: string): Promise<Googl
   }
   const payload = await response.json() as { places?: GooglePlaceRecord[] };
   return Array.isArray(payload.places) ? payload.places : [];
-}
-
-async function geocodeGooglePlaceId(placeId: string, apiKey: string): Promise<{
-  latitude: number;
-  longitude: number;
-  granularity: string;
-  formattedAddress: string | null;
-} | null> {
-  const url = new URL("https://geocode.googleapis.com/v4/geocode/places/" + encodeURIComponent(placeId));
-  url.searchParams.set("languageCode", "pt-BR");
-  url.searchParams.set("regionCode", "BR");
-  const response = await fetch(url, {
-    headers: {
-      "Accept": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "placeId,location,granularity,formattedAddress",
-    },
-    signal: AbortSignal.timeout(12000),
-  });
-  if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).slice(0, 200);
-    throw new Error("Google Geocoding v4 HTTP " + response.status + (detail ? ": " + detail : ""));
-  }
-  const payload = await response.json() as {
-    results?: Array<Record<string, unknown>>;
-    location?: { latitude?: number; longitude?: number };
-    granularity?: string;
-    formattedAddress?: string;
-  };
-  const result = Array.isArray(payload.results) ? payload.results[0] : payload;
-  if (!result) return null;
-  const location = (result.location || {}) as Record<string, unknown>;
-  const latitude = Number(location.latitude);
-  const longitude = Number(location.longitude);
-  if (!isValidPoint(latitude, longitude)) return null;
-  return {
-    latitude,
-    longitude,
-    granularity: String(result.granularity || "APPROXIMATE"),
-    formattedAddress: result.formattedAddress ? String(result.formattedAddress) : null,
-  };
 }
 
 async function verifyStoreWithGoogle(store: StoreRow, apiKey: string): Promise<GoogleVerificationResult> {
@@ -329,53 +265,20 @@ async function verifyStoreWithGoogle(store: StoreRow, apiKey: string): Promise<G
   if (second && second.match.placeId !== best.match.placeId && best.match.score - second.match.score < 5) {
     return {
       status: "needs_review",
-      confidence: best.match.score / 100,
       reason: "Mais de uma unidade corresponde ao nome e endereço; é necessária uma revisão manual.",
     };
   }
   if (best.match.score < 80) {
     return {
       status: "needs_review",
-      confidence: best.match.score / 100,
       reason: "A correspondência do Google não atingiu a confiança mínima.",
     };
   }
 
-  let geocoded: Awaited<ReturnType<typeof geocodeGooglePlaceId>> = null;
-  try {
-    geocoded = await geocodeGooglePlaceId(best.match.placeId, apiKey);
-  } catch (error) {
-    console.warn("[geocode-stores] Geocoding v4 indisponível; usando o ponto do estabelecimento retornado pelo Places.", {
-      storeName: store.name,
-      reason: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  const latitude = geocoded?.latitude ?? best.match.latitude;
-  const longitude = geocoded?.longitude ?? best.match.longitude;
-  if (!isValidPoint(latitude, longitude)) {
-    return { status: "needs_review", confidence: best.match.score / 100, reason: "O Google identificou a unidade, mas não retornou coordenadas válidas." };
-  }
-
-  const granularity = geocoded?.granularity || "PLACE_LOCATION";
-  return {
-    status: "verified",
-    confidence: best.match.score / 100,
-    point: {
-      latitude,
-      longitude,
-      precision: granularity === "ROOFTOP" ? "address" : "street",
-      source: geocoded ? "Google Places + Geocoding API v4" : "Google Places API (New)",
-      googlePlaceId: best.match.placeId,
-      googleMapsUri: best.match.googleMapsUri,
-      googleFormattedAddress: geocoded?.formattedAddress || best.match.formattedAddress || null,
-      googleBusinessStatus: best.match.businessStatus,
-      googleGranularity: granularity,
-      googleMatchConfidence: best.match.score / 100,
-    },
-  };
+  // Google Place IDs are exempt from Google's caching restrictions.
+  // Coordinates and other Places content are deliberately not persisted or used on the MapLibre map.
+  return { status: "verified", placeId: best.match.placeId };
 }
-
 function pickPhoton(
   features: Array<{ geometry?: { coordinates?: number[] }; properties?: Record<string, unknown> }>,
   store: StoreRow,
@@ -424,80 +327,6 @@ function pickPhoton(
   } : null;
 }
 
-function pickGoogle(
-  results: Array<Record<string, unknown>>,
-  store: StoreRow,
-): GeoPoint | null {
-  const { street, number } = addressParts(store.address);
-  const candidates = results.map((result) => {
-    const components = Array.isArray(result.address_components)
-      ? result.address_components as Array<{ long_name?: string; short_name?: string; types?: string[] }>
-      : [];
-    const component = (type: string, short = false) => {
-      const found = components.find((item) => item.types?.includes(type));
-      return String(short ? found?.short_name || "" : found?.long_name || "");
-    };
-    const formatted = String(result.formatted_address || "");
-    const route = normalize(component("route"));
-    const streetMatches = (route.length > 3 && (route.includes(street) || street.includes(route)))
-      || normalize(formatted).includes(street);
-    const resultNumber = normalize(component("street_number"));
-    const numberConflict = Boolean(number && resultNumber && number !== resultNumber);
-    const numberMatches = Boolean(number && resultNumber && number === resultNumber);
-    const city = component("locality") || component("postal_town")
-      || component("administrative_area_level_2") || "";
-    const state = component("administrative_area_level_1", true)
-      || component("administrative_area_level_1") || "";
-    const country = component("country", true) || component("country");
-    const locationOk = locationMatches(store, city, state, country, formatted);
-    const geometry = (result.geometry || {}) as Record<string, unknown>;
-    const location = (geometry.location || {}) as Record<string, unknown>;
-    const latitude = Number(location.lat);
-    const longitude = Number(location.lng);
-    const valid = isValidPoint(latitude, longitude) && streetMatches && !numberConflict && locationOk;
-    const locationType = String(geometry.location_type || "");
-    return {
-      latitude,
-      longitude,
-      valid,
-      score: (streetMatches ? 6 : 0) + (locationOk ? 4 : 0) + (numberMatches ? 8 : 0)
-        + (locationType === "ROOFTOP" ? 3 : locationType === "RANGE_INTERPOLATED" ? 2 : 0),
-      precision: numberMatches && locationType === "ROOFTOP" ? "address" as const : "street" as const,
-    };
-  }).filter((candidate) => candidate.valid).sort((a, b) => b.score - a.score);
-
-  const chosen = candidates[0];
-  return chosen ? {
-    latitude: chosen.latitude,
-    longitude: chosen.longitude,
-    precision: chosen.precision,
-    source: "Google Maps Geocoding API",
-  } : null;
-}
-
-async function geocodeWithGoogle(store: StoreRow, apiKey: string): Promise<GeoPoint | null> {
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  const state = STATE_NAMES[normalize(store.state)] || store.state;
-  url.searchParams.set("address", [store.address, store.city, state, "Brasil"].filter(Boolean).join(", "));
-  url.searchParams.set("components", "country:BR");
-  url.searchParams.set("region", "br");
-  url.searchParams.set("language", "pt-BR");
-  url.searchParams.set("key", apiKey);
-
-  const response = await fetch(url, {
-    headers: { "Accept": "application/json" },
-    signal: AbortSignal.timeout(12000),
-  });
-  if (!response.ok) throw new Error("Google Geocoding HTTP " + response.status);
-  const payload = await response.json();
-  if (payload.status === "ZERO_RESULTS") return null;
-  if (payload.status !== "OK") {
-    throw new Error("Google Geocoding: " + String(payload.status || "resposta inválida")
-      + (payload.error_message ? " — " + String(payload.error_message) : ""));
-  }
-  return pickGoogle(Array.isArray(payload.results) ? payload.results : [], store);
-}
-
 async function fetchPhotonFeatures(url: URL, label: string) {
   const response = await fetch(url, {
     headers: {
@@ -520,39 +349,8 @@ async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
   const query = [store.address, store.city, state, "Brasil"].filter(Boolean).join(", ");
   const errors: string[] = [];
 
-  // Prefer an exact business match from Places before falling back to address-only geocoding.
-  const googleKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
-  if (googleKey) {
-    try {
-      const verification = await verifyStoreWithGoogle(store, googleKey);
-      if (verification.status === "verified" && verification.point) return verification.point;
-      if (verification.reason) console.info("[geocode-stores] Places não confirmou a unidade; mantendo fallback de endereço.", {
-        storeName: store.name,
-        reason: verification.reason,
-      });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      errors.push("Google Places: " + reason);
-      console.warn("[geocode-stores] Google Places falhou; tentando Geocoding e OpenStreetMap.", {
-        storeName: store.name,
-        reason,
-      });
-    }
-
-    try {
-      const googlePoint = await geocodeWithGoogle(store, googleKey);
-      if (googlePoint) return googlePoint;
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      errors.push("Google Geocoding: " + reason);
-      console.warn("[geocode-stores] Google Geocoding não localizou o endereço; tentando OpenStreetMap.", {
-        storeName: store.name,
-        reason,
-      });
-    }
-  }
-
-  // Structured search is more precise for addresses that already include street and number.
+  // The ZORVI map uses MapLibre/OpenStreetMap, so its marker coordinates must come from
+  // OSM or manual verification. Google Places is used only to save an exempt place ID.
   const structuredUrl = new URL("https://photon.komoot.io/structured");
   structuredUrl.searchParams.set("street", streetQuery);
   if (number) structuredUrl.searchParams.set("housenumber", number);
@@ -576,7 +374,6 @@ async function geocodeStore(store: StoreRow): Promise<GeoPoint | null> {
     });
   }
 
-  // Photon forward search uses /api (without a trailing slash); /api/ returned HTTP 400.
   const textUrl = new URL("https://photon.komoot.io/api");
   textUrl.searchParams.set("q", query);
   textUrl.searchParams.set("countrycode", "br");
@@ -714,22 +511,10 @@ Deno.serve(async (request: Request) => {
     try {
       if (mode === "verify") {
         const result = await verifyStoreWithGoogle(store, googleKey as string);
-        if (result.status === "verified" && result.point) {
-          const point = result.point;
+        if (result.status === "verified" && result.placeId) {
           const { error: updateError } = await admin.from("stores").update({
-            latitude: point.latitude,
-            longitude: point.longitude,
-            coordinate_precision: point.precision,
-            coordinate_source: point.source,
-            geocoded_at: now,
-            geocode_attempted_at: now,
-            google_place_id: point.googlePlaceId,
-            google_maps_uri: point.googleMapsUri || null,
-            google_formatted_address: point.googleFormattedAddress || null,
-            google_business_status: point.googleBusinessStatus || null,
-            google_granularity: point.googleGranularity || null,
+            google_place_id: result.placeId,
             google_match_status: "verified",
-            google_match_confidence: point.googleMatchConfidence ?? result.confidence ?? null,
             google_checked_at: now,
             google_verified_at: now,
           }).eq("id", store.id);
@@ -739,7 +524,6 @@ Deno.serve(async (request: Request) => {
         } else {
           const { error: statusError } = await admin.from("stores").update({
             google_match_status: result.status,
-            google_match_confidence: result.confidence ?? null,
             google_checked_at: now,
           }).eq("id", store.id);
           if (statusError) throw statusError;
@@ -772,19 +556,6 @@ Deno.serve(async (request: Request) => {
         geocoded_at: now,
         geocode_attempted_at: now,
       };
-      if (point.googlePlaceId) {
-        Object.assign(updatePayload, {
-          google_place_id: point.googlePlaceId,
-          google_maps_uri: point.googleMapsUri || null,
-          google_formatted_address: point.googleFormattedAddress || null,
-          google_business_status: point.googleBusinessStatus || null,
-          google_granularity: point.googleGranularity || null,
-          google_match_status: "verified",
-          google_match_confidence: point.googleMatchConfidence ?? null,
-          google_checked_at: now,
-          google_verified_at: now,
-        });
-      }
       const { error: updateError } = await admin.from("stores").update(updatePayload).eq("id", store.id);
       if (updateError) throw updateError;
       updated += 1;
