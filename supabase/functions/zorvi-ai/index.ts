@@ -271,10 +271,12 @@ function buildCatalogFallback(
     );
     if (results.length > 0) {
       const first = results[0];
-      return "Encontrei " + results.length + " preço(s) verificado(s) para " + productNames[0] + ". "
-        + "A menor oferta cadastrada é " + formatPrice(first.price, first.currency) + " na "
+      const priceLabel = first.priceType === "estimated" ? "A menor estimativa cadastrada é " : "A menor oferta verificada é ";
+      return "Encontrei " + results.length + " preço(s) para " + productNames[0] + ". "
+        + priceLabel + formatPrice(first.price, first.currency) + " na "
         + first.storeName + ". Fonte: " + first.sourceLabel + ". Atualizado em "
         + new Date(first.observedAt).toLocaleString("pt-BR") + ". "
+        + (first.priceType === "estimated" ? "Esse valor é uma estimativa baseada na fonte. " : "")
         + "Confira a disponibilidade diretamente com o estabelecimento antes de comprar.";
     }
     return "Encontrei " + productNames.join("; ") + " no catálogo da ZORVI, mas ainda não há preço verificado disponível para esse produto na região consultada. "
@@ -343,6 +345,7 @@ const systemPrompt = [
   "REGRA DE CONFIANÇA: use exclusivamente o contexto de dados do Supabase fornecido nesta conversa para falar de produtos, lojas, preços, promoções, disponibilidade e localização.",
   "Nunca invente, estime ou deduza preços, descontos, estoque, horários, taxas de entrega, avaliações, distâncias ou estabelecimentos.",
   "Só apresente preços que estejam na lista verified_prices. Esses registros já foram filtrados para status verificado e observações dos últimos 30 dias.",
+  "Se price_type for estimated, trate o valor como estimativa e nunca o chame de preço confirmado. Identifique como estimativa baseada na fonte.",
   "Não escreva valores monetários numéricos na resposta em texto. Quando houver ofertas, a interface exibirá cartões com os preços exatos e suas fontes.",
   "Compare somente o mesmo product_id. Não trate embalagens, marcas, concentrações ou quantidades diferentes como produtos equivalentes.",
   "Se availability_status for unknown, diga que o estoque não foi confirmado. Mesmo quando for available, recomende confirmar diretamente com a loja.",
