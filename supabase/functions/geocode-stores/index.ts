@@ -641,13 +641,17 @@ Deno.serve(async (request: Request) => {
     }, 503);
   }
 
-  let storesQuery = admin
-    .from("stores")
-    .select("id,name,brand_name,address,city,state,category,latitude,longitude,geocode_attempted_at,google_checked_at,created_at")
-    .order("created_at", { ascending: true })
-    .limit(500);
-  if (mode === "verify") storesQuery = storesQuery.eq("verification_status", "verified");
-  const { data: catalogStores, error: queryError } = await storesQuery;
+  const queryResult = mode === "verify"
+    ? await admin.from("stores")
+      .select("id,name,brand_name,address,city,state,category,latitude,longitude,geocode_attempted_at,google_checked_at,created_at")
+      .eq("verification_status", "verified")
+      .order("created_at", { ascending: true })
+      .limit(500)
+    : await admin.from("stores")
+      .select("id,name,brand_name,address,city,state,category,latitude,longitude,geocode_attempted_at,google_checked_at,created_at")
+      .order("created_at", { ascending: true })
+      .limit(500);
+  const { data: catalogStores, error: queryError } = queryResult;
 
   if (queryError) {
     console.error("[geocode-stores] Falha ao consultar public.stores.", {
