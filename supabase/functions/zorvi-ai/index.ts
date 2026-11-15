@@ -117,9 +117,12 @@ function parseLocation(value: unknown): LocationContext {
   const precision = ["precise", "approximate", "manual", "city"].includes(String(input.precision))
     ? input.precision as LocationContext["precision"]
     : null;
-  const latitude = Number(input.latitude);
-  const longitude = Number(input.longitude);
-  const accuracy = Number(input.accuracy);
+  const latitude = input.latitude === null || input.latitude === undefined || input.latitude === ""
+    ? Number.NaN : Number(input.latitude);
+  const longitude = input.longitude === null || input.longitude === undefined || input.longitude === ""
+    ? Number.NaN : Number(input.longitude);
+  const accuracy = input.accuracy === null || input.accuracy === undefined || input.accuracy === ""
+    ? Number.NaN : Number(input.accuracy);
   return {
     city: cleanString(input.city, 80),
     state: cleanString(input.state, 40),
@@ -309,6 +312,7 @@ const systemPrompt = [
   "REGRA DE CONFIANÇA: use exclusivamente o contexto de dados do Supabase fornecido nesta conversa para falar de produtos, lojas, preços, promoções, disponibilidade e localização.",
   "Nunca invente, estime ou deduza preços, descontos, estoque, horários, taxas de entrega, avaliações, distâncias ou estabelecimentos.",
   "Só apresente preços que estejam na lista verified_prices. Esses registros já foram filtrados para status verificado e observações dos últimos 30 dias.",
+  "Não escreva valores monetários numéricos na resposta em texto. Quando houver ofertas, a interface exibirá cartões com os preços exatos e suas fontes.",
   "Compare somente o mesmo product_id. Não trate embalagens, marcas, concentrações ou quantidades diferentes como produtos equivalentes.",
   "Se availability_status for unknown, diga que o estoque não foi confirmado. Mesmo quando for available, recomende confirmar diretamente com a loja.",
   "Só informe distância quando distance_km estiver preenchida. Se não estiver, não invente quilometragem nem use 'perto' como fato.",
@@ -448,6 +452,17 @@ Deno.serve(async (request: Request) => {
   };
 
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+  const requiresCatalogOnlyAnswer = (matchingProducts.length > 0 || asksForOffers) && results.length === 0;
+  if (requiresCatalogOnlyAnswer) {
+    return json({
+      mode: "catalog",
+      answer: catalogFallback,
+      results: [],
+      aiAvailable: Boolean(lovableApiKey),
+      code: "NO_VERIFIED_PRICE_DATA",
+    });
+  }
+
   if (!lovableApiKey) {
     return json({
       mode: "catalog",
@@ -521,6 +536,16 @@ Deno.serve(async (request: Request) => {
         results: results.slice(0, 5),
         aiAvailable: false,
         code: "AI_EMPTY_RESPONSE",
+      });
+    }
+
+    if (/R\\$\\s*[0-9][0-9.,]*|\\b[0-9]+(?:[.,][0-9]{1,2})?\\s*(?:reais|centavos)\\b/i.test(answer)) {
+      return json({
+        mode: "catalog",
+        answer: catalogFallback,
+        results: results.slice(0, 5),
+        aiAvailable: false,
+        code: "AI_PRICE_CLAIM_REJECTED",
       });
     }
 
