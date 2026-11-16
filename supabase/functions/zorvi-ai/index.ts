@@ -356,10 +356,10 @@ async function discoverOpenFoodFactsProducts(
         last_modified_t?: number;
       }>;
     };
-    const externalProducts = (payload.products || [])
+    const externalProducts = [...new Map((payload.products || [])
       .filter((item) => Boolean(item.code && item.product_name?.trim()))
       .filter((item) => !item.countries_tags?.length || item.countries_tags.some((tag) => normalize(tag).includes("brazil")))
-      .slice(0, 24);
+      .map((item) => [item.code, item])).values()].slice(0, 24);
 
     if (!externalProducts.length) {
       await admin.from("product_catalog_search_cache").upsert({
