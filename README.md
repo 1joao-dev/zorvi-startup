@@ -109,6 +109,18 @@ Para habilitar a associação:
 
 A verificação é executada em lotes de cinco unidades e evita repetir consultas por 30 dias.
 
+## Coleta automática de preços — cidade-piloto
+
+A primeira região de coleta é **Teresina, PI**.
+
+- A função `catalog-import` consulta diariamente a fonte comunitária Open Prices.
+- A execução agendada ocorre às 06:00 no horário de Teresina (09:00 UTC).
+- Somente estabelecimentos verificados e geolocalizados da cidade-piloto entram na correspondência.
+- São importados apenas preços recentes em BRL, com correspondência exata de código de barras, estabelecimento/localização e evidência de etiqueta ou recibo.
+- Duplicatas são descartadas e disponibilidade/estoque nunca é inferida.
+- Observações comunitárias novas continuam pendentes para revisão; a coleta é automática, mas isso não transforma relatos comunitários em preços oficiais.
+- A expansão para outra cidade exige habilitar a nova região no escopo de coleta após a validação do piloto.
+
 ## Moderação administrativa de preços
 
 O painel de moderação fica em **Perfil → Moderação de preços** e permite revisar observações antes de elas aparecerem nas comparações.

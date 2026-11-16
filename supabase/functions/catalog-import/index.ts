@@ -3,6 +3,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+// Cidade-piloto inicial do ZORVI. Adicione novas cidades somente na etapa de expansão.
+const PILOT_CITY = "Teresina";
+const PILOT_STATE = "PI";
+
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing Supabase server environment variables.");
 }
@@ -582,6 +586,8 @@ async function importOpenPrices() {
   const { data: stores, error: storeError } = await admin.from("stores")
     .select("id,name,brand_name,address,city,state,latitude,longitude")
     .eq("verification_status", "verified")
+    .eq("city", PILOT_CITY)
+    .eq("state", PILOT_STATE)
     .limit(1000);
   if (storeError) throw new Error("Could not load stores for Open Prices matching: " + storeError.message);
 
