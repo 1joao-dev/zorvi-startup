@@ -134,3 +134,10 @@ O painel de moderação fica em **Perfil → Moderação de preços** e permite 
 
 A função `price-review` exige JWT de uma sessão autenticada e valida o token administrativo no servidor. Nenhuma chave de serviço é enviada ao frontend.
 
+## Coleta automática de preços — Teresina
+
+- **Atacadão Online:** pesquisa regionalizada para o CEP 64045-840, somente vendedor oficial ATACADAO SA. O importador usa preço regular de tabela e não presume descontos por quantidade.
+- **Pague Menos Online:** pesquisa regionalizada para o CEP 64049-570, somente vendedor oficial Farmácias Pague Menos; ofertas de marketplace de terceiros são descartadas.
+- Os canais digitais não têm coordenadas e não aparecem como pinos físicos no mapa. As ofertas são identificadas como online, com fonte e data de coleta; estoque em filial física não é presumido.
+- Sincronização diária às 06:30 no horário de Teresina (09:30 UTC).
+

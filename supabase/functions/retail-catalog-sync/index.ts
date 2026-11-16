@@ -5,369 +5,265 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
-  status,
-  headers: { ...corsHeaders, "Content-Type": "application/json" },
+  status, headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
-
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) throw new Error("Missing Supabase server environment variables.");
-
-const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+const url = Deno.env.get("SUPABASE_URL");
+const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+if (!url || !key) throw new Error("Missing Supabase server environment variables.");
+const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
 type Provider = {
-  id: string;
-  label: string;
-  domain: string;
-  searchUrl: string;
+  id: "atacadao" | "pague_menos"; label: string; base: string; domain: string;
+  postalCode: string; category: "Mercado" | "Farmácia"; sellerId: string; sellerName: string;
+  storeName: string; priceMode: "regular" | "current"; terms: string[];
+};
+type Candidate = {
+  provider: Provider; sourceProductId: string; barcode: string; name: string;
+  brand: string | null; unit: string | null; subcategory: string | null;
+  imageUrl: string | null; sourceUrl: string; price: number; priceNote: string;
 };
 
-const PROVIDERS: Provider[] = [
+const providers: Provider[] = [
   {
-    id: "atacadao",
-    label: "Atacadão",
-    domain: "www.atacadao.com.br",
-    searchUrl: "https://www.atacadao.com.br/api/catalog_system/pub/products/search",
+    id: "atacadao", label: "Atacadão", base: "https://secure.atacadao.com.br",
+    domain: "secure.atacadao.com.br", postalCode: "64045840", category: "Mercado",
+    sellerId: "1", sellerName: "ATACADAO SA", storeName: "Atacadão Online — Teresina (CEP 64045-840)",
+    priceMode: "regular",
+    terms: ["arroz", "feijão", "leite", "café", "macarrão", "óleo de soja", "açúcar", "ovos", "detergente", "papel higiênico"],
   },
   {
-    id: "pague_menos",
-    label: "Pague Menos",
-    domain: "www.paguemenos.com.br",
-    searchUrl: "https://www.paguemenos.com.br/api/catalog_system/pub/products/search",
-  },
-  {
-    id: "atacadao_secure",
-    label: "Atacadão (domínio de e-commerce)",
-    domain: "secure.atacadao.com.br",
-    searchUrl: "https://secure.atacadao.com.br/api/catalog_system/pub/products/search",
+    id: "pague_menos", label: "Farmácias Pague Menos", base: "https://www.paguemenos.com.br",
+    domain: "www.paguemenos.com.br", postalCode: "64049570", category: "Farmácia",
+    sellerId: "1", sellerName: "Farmácias Pague Menos",
+    storeName: "Pague Menos Online — Teresina (CEP 64049-570)", priceMode: "current",
+    terms: ["paracetamol", "dipirona", "ibuprofeno", "protetor solar", "shampoo", "desodorante", "sabonete", "creme dental", "fralda", "absorvente"],
   },
 ];
 
-async function isAuthorised(request: Request): Promise<boolean> {
-  const header = request.headers.get("authorization") || "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token || token.length < 32) return false;
+const normalize = (v: unknown) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const numeric = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+function unitFrom(name: string) {
+  return name.match(/\b\d+(?:[.,]\d+)?\s?(?:kg|g|mg|mcg|ml|l|un|unid|unidades?|comprimidos?|c[aá]psulas?|tabletes?|sach[eê]s?)\b/i)?.[0] || null;
+}
+function safeUrl(value: unknown, provider: Provider) {
+  if (typeof value !== "string") return null;
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" && (u.hostname === provider.domain || u.hostname.endsWith("." + provider.domain)) ? u.toString() : null;
+  } catch { return null; }
+}
+async function authorised(request: Request) {
+  const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (token.length < 32) return false;
   const { data, error } = await admin.rpc("verify_catalog_import_token", { candidate: token });
-  if (error) {
-    console.error("[retail-catalog-sync] Token verification failed:", error.message);
-    return false;
-  }
-  return data === true;
+  if (error) console.error("[retail-catalog-sync] Token check failed:", error.message);
+  return !error && data === true;
 }
-
-async function probe(provider: Provider, term: string) {
-  const url = new URL(provider.searchUrl);
-  url.searchParams.set("ft", term);
-  url.searchParams.set("_from", "0");
-  url.searchParams.set("_to", "19");
-
-  const startedAt = Date.now();
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
-        "Accept": "application/json",
-      },
-      signal: AbortSignal.timeout(20000),
-    });
-    const contentType = response.headers.get("content-type") || "";
-    const body = await response.text();
-    let payload: unknown = null;
-    try { payload = JSON.parse(body); } catch { /* non-JSON response */ }
-
-    const products = Array.isArray(payload) ? payload : [];
-    const samples = products.slice(0, 8).map((raw) => {
-      const product = raw as Record<string, unknown>;
-      const items = Array.isArray(product.items) ? product.items as Array<Record<string, unknown>> : [];
-      const item = items[0] || null;
-      const sellers = Array.isArray(item?.sellers) ? item.sellers as Array<Record<string, unknown>> : [];
-      const sellerRows = sellers.slice(0, 4).map((seller) => {
-        const offer = seller.commertialOffer && typeof seller.commertialOffer === "object"
-          ? seller.commertialOffer as Record<string, unknown>
-          : null;
-        return {
-          sellerId: seller.sellerId ?? null,
-          sellerName: seller.sellerName ?? null,
-          sellerDefault: seller.sellerDefault ?? null,
-          price: offer?.Price ?? null,
-          listPrice: offer?.ListPrice ?? null,
-          availableQuantity: offer?.AvailableQuantity ?? null,
-          priceTags: offer?.PriceTags ?? null,
-          priceDefinition: offer?.PriceDefinition ?? null,
-          offerFields: offer ? Object.keys(offer) : [],
-        };
-      });
-      return {
-        productId: product.productId ?? null,
-        productName: product.productName ?? null,
-        brand: product.brand ?? null,
-        link: product.link ?? null,
-        itemId: item?.itemId ?? null,
-        ean: item?.ean ?? null,
-        itemName: item?.name ?? null,
-        sellers: sellerRows,
-        categories: product.categories ?? null,
-      };
-    });
-    const first = products[0] && typeof products[0] === "object"
-      ? products[0] as Record<string, unknown>
-      : null;
-
-    return {
-      provider: provider.id,
-      label: provider.label,
-      status: response.status,
-      ok: response.ok,
-      contentType,
-      elapsedMs: Date.now() - startedAt,
-      term,
-      productCount: products.length,
-      samples,
-      responsePreview: products.length === 0 ? body.slice(0, 300) : undefined,
-    };
-  } catch (error) {
-    return {
-      provider: provider.id,
-      label: provider.label,
-      ok: false,
-      elapsedMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+async function regionFor(provider: Provider) {
+  const u = new URL(provider.base + "/api/checkout/pub/regions");
+  u.searchParams.set("country", "BRA"); u.searchParams.set("postalCode", provider.postalCode);
+  const response = await fetch(u, { headers: { Accept: "application/json", "User-Agent": "ZORVI/1.0" }, signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new Error("Região indisponível (HTTP " + response.status + ")");
+  const payload = await response.json();
+  const row = Array.isArray(payload) ? payload[0] : null;
+  const regionId = String(row?.id || row?.regionId || "");
+  if (!regionId) throw new Error("O site não retornou região para o CEP " + provider.postalCode);
+  const sellers = Array.isArray(row?.sellers) ? row.sellers : [];
+  const names = sellers.map((s: Record<string, unknown>) => String(s.name || s.id || "").trim())
+    .filter((name: string) => name && (provider.id !== "atacadao" || normalize(name).includes("teresina")));
+  return { regionId, sellers: names, sellerCount: sellers.length };
 }
-
-
-async function probeAtacadaoStorePages() {
-  const pages = [
-    { slug: "teresina-bela-vista", store: "Atacadão Bela Vista" },
-    { slug: "teresina-ladeira-do-uruguai", store: "Atacadão Ladeira do Uruguai" },
-    { slug: "teresina-primavera", store: "Atacadão Primavera" },
-  ];
-  const results = [];
-  for (const entry of pages) {
-    const url = "https://www.atacadao.com.br/loja/" + entry.slug;
-    const startedAt = Date.now();
+async function search(provider: Provider, regionId: string, term: string) {
+  const u = new URL(provider.base + "/api/intelligent-search/v1/product-search");
+  u.searchParams.set("query", term); u.searchParams.set("regionId", regionId);
+  u.searchParams.set("country", "BRA"); u.searchParams.set("zip-code", provider.postalCode);
+  u.searchParams.set("sc", "1"); u.searchParams.set("count", "50"); u.searchParams.set("page", "1");
+  const response = await fetch(u, { headers: { Accept: "application/json", "User-Agent": "ZORVI/1.0" }, signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new Error("Busca '" + term + "' retornou HTTP " + response.status);
+  const payload = await response.json() as { products?: Array<Record<string, unknown>> };
+  const products = Array.isArray(payload.products) ? payload.products : [];
+  const candidates: Candidate[] = [];
+  let skipped = 0;
+  for (const p of products) {
+    const items = Array.isArray(p.items) ? p.items as Array<Record<string, unknown>> : [];
+    const item = items[0];
+    if (!p.productId || !item?.itemId) { skipped++; continue; }
+    const barcode = String(item.ean || "").replace(/\D/g, "");
+    if (!/^\d{8,14}$/.test(barcode)) { skipped++; continue; }
+    const sellerRows = Array.isArray(item.sellers) ? item.sellers as Array<Record<string, unknown>> : [];
+    const seller = sellerRows.find((s) => String(s.sellerId || "") === provider.sellerId && normalize(s.sellerName) === normalize(provider.sellerName));
+    const offer = seller?.commertialOffer as Record<string, unknown> | undefined;
+    if (!offer) { skipped++; continue; }
+    const current = numeric(offer.Price), list = numeric(offer.ListPrice), quantity = numeric(offer.AvailableQuantity);
+    if (current === null || current <= 0 || (quantity !== null && quantity <= 0)) { skipped++; continue; }
+    const price = provider.priceMode === "regular" && list !== null && list > 0 ? list : current;
+    const sourceUrl = safeUrl(p.link, provider);
+    if (!sourceUrl) { skipped++; continue; }
+    const name = String(item.name || p.productName || "").trim();
+    if (!name) { skipped++; continue; }
+    const categories = Array.isArray(p.categories) ? p.categories as string[] : [];
+    const imageRows = Array.isArray(item.images) ? item.images as Array<Record<string, unknown>> : [];
+    const promoIgnored = provider.priceMode === "regular" && list !== null && current < list - 0.009;
+    candidates.push({
+      provider,
+      sourceProductId: String(p.productId) + ":" + String(item.itemId),
+      barcode, name, brand: String(p.brand || "").trim() || null, unit: unitFrom(name),
+      subcategory: categories[0] ? String(categories[0]).split("/").filter(Boolean).slice(-1)[0] || null : null,
+      imageUrl: typeof imageRows[0]?.imageUrl === "string" ? String(imageRows[0].imageUrl) : null,
+      sourceUrl, price: Math.round(price * 100) / 100,
+      priceNote: provider.id === "atacadao"
+        ? (promoIgnored ? "Preço regular de tabela; descontos promocionais ou por quantidade não incluídos." : "Preço regular publicado no catálogo online.")
+        : (list !== null && current < list - 0.009 ? "Preço promocional exibido no site; condições da oferta podem variar." : "Preço atual exibido no site oficial."),
+    });
+  }
+  return { candidates, found: products.length, skipped };
+}
+async function batches<T>(values: string[], load: (part: string[]) => Promise<T[]>) {
+  const unique = [...new Set(values.filter(Boolean))]; const out: T[] = [];
+  for (let i = 0; i < unique.length; i += 100) out.push(...await load(unique.slice(i, i + 100)));
+  return out;
+}
+async function fetchCatalog(provider: Provider) {
+  const region = await regionFor(provider);
+  const byBarcode = new Map<string, Candidate>();
+  let found = 0, skipped = 0;
+  const terms: Array<Record<string, unknown>> = [];
+  for (const term of provider.terms) {
     try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
-          "Accept": "text/html,application/xhtml+xml",
-        },
-        signal: AbortSignal.timeout(20000),
-      });
-      const html = await response.text();
-      const priceMatches = [...html.matchAll(/R\\$\\s*[0-9.]+,[0-9]{2}/g)].slice(0, 8).map((match) => match[0]);
-      const productNameMatches = [...html.matchAll(/(?:productName|name)\\s*[:=]\\s*["']([^"']{3,100})["']/g)]
-        .slice(0, 5).map((match) => match[1]);
-      results.push({
-        store: entry.store,
-        status: response.status,
-        ok: response.ok,
-        htmlLength: html.length,
-        mentionsTeresina: /teresina/i.test(html),
-        containsCatalogData: /productName|productId|commertialOffer|Catalogo completo/i.test(html),
-        visiblePriceSamples: priceMatches,
-        productNameSamples: productNameMatches,
-        elapsedMs: Date.now() - startedAt,
-      });
+      const result = await search(provider, region.regionId, term);
+      found += result.found; skipped += result.skipped;
+      for (const c of result.candidates) if (!byBarcode.has(c.barcode)) byBarcode.set(c.barcode, c);
+      terms.push({ term, found: result.found, eligible: result.candidates.length, skipped: result.skipped });
     } catch (error) {
-      results.push({
-        store: entry.store,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-        elapsedMs: Date.now() - startedAt,
-      });
+      skipped++; terms.push({ term, found: 0, eligible: 0, error: error instanceof Error ? error.message : String(error) });
     }
+    await pause(120);
   }
-  return results;
+  return { provider, regionId: region.regionId, sellers: region.sellers, sellerCount: region.sellerCount, found, skipped, terms, candidates: [...byBarcode.values()] };
 }
+async function persistCatalog(catalog: Awaited<ReturnType<typeof fetchCatalog>>, preview: boolean) {
+  const provider = catalog.provider;
+  const storeResult = await admin.from("stores").select("id").eq("name", provider.storeName).eq("city", "Teresina").eq("state", "PI").maybeSingle();
+  if (storeResult.error) throw new Error("Falha ao localizar canal online: " + storeResult.error.message);
+  if (!preview && !storeResult.data?.id) throw new Error("Canal online ainda não cadastrado: " + provider.storeName);
+  const storeId = storeResult.data?.id || null;
 
+  const barcodes = catalog.candidates.map((c) => c.barcode);
+  const sourceIds = catalog.candidates.map((c) => c.sourceProductId);
+  const byBarcodeRows = await batches(barcodes, async (part) => {
+    const { data, error } = await admin.from("products").select("id,barcode,category,is_active,source_provider,source_product_id").in("barcode", part);
+    if (error) throw new Error("Falha ao consultar produtos: " + error.message);
+    return data || [];
+  });
+  const bySourceRows = await batches(sourceIds, async (part) => {
+    const { data, error } = await admin.from("products").select("id,barcode,category,is_active,source_provider,source_product_id").eq("source_provider", provider.id).in("source_product_id", part);
+    if (error) throw new Error("Falha ao consultar identidade de catálogo: " + error.message);
+    return data || [];
+  });
+  const byBarcode = new Map(byBarcodeRows.filter((p) => p.barcode).map((p) => [String(p.barcode), p]));
+  const bySource = new Map(bySourceRows.filter((p) => p.source_product_id).map((p) => [String(p.source_product_id), p]));
+  const newProducts = catalog.candidates.filter((c) => !byBarcode.has(c.barcode) && !bySource.has(c.sourceProductId)).map((c) => ({
+    name: c.name, normalized_name: normalize([c.name, c.brand, c.unit].filter(Boolean).join(" ")),
+    brand: c.brand, variant: null, barcode: c.barcode, category: provider.category, unit: c.unit,
+    subcategory: c.subcategory, source_provider: provider.id, source_product_id: c.sourceProductId,
+    source_url: c.sourceUrl, image_url: c.imageUrl,
+    description: "Produto do catálogo oficial " + provider.label + ". Oferta online regionalizada para Teresina/PI; não confirma estoque em filial física.",
+    country_code: "BR", source_updated_at: new Date().toISOString(), is_active: true,
+  }));
 
-async function probeRegionalization(provider: Provider, postalCode: string, term: string) {
-  const base = "https://" + provider.domain;
-  const startedAt = Date.now();
-  try {
-    const sessionResponse = await fetch(base + "/api/sessions", {
-      method: "POST",
-      headers: {
-        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify({
-        public: {
-          country: { value: "BRA" },
-          postalCode: { value: postalCode },
-        },
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
-    const setCookie = typeof sessionResponse.headers.getSetCookie === "function"
-      ? sessionResponse.headers.getSetCookie()
-      : [sessionResponse.headers.get("set-cookie") || ""];
-    const cookies = setCookie.flatMap((line) => line.split(/, (?=[^;,]+=)/))
-      .map((line) => line.split(";")[0].trim())
-      .filter(Boolean);
-    const cookieHeader = cookies.join("; ");
-
-    const regionUrl = new URL(base + "/api/checkout/pub/regions");
-    regionUrl.searchParams.set("country", "BRA");
-    regionUrl.searchParams.set("postalCode", postalCode);
-    const regionResponse = await fetch(regionUrl, {
-      headers: { "User-Agent": "ZORVI/1.0", "Accept": "application/json" },
-      signal: AbortSignal.timeout(20000),
-    });
-    const regionText = await regionResponse.text();
-    let regionPayload: unknown = null;
-    try { regionPayload = JSON.parse(regionText); } catch { /* no region JSON */ }
-    const regionRows = Array.isArray(regionPayload) ? regionPayload as Array<Record<string, unknown>> : [];
-    const regionId = regionRows[0]?.id ?? regionRows[0]?.regionId ?? null;
-    const sellers = Array.isArray(regionRows[0]?.sellers)
-      ? (regionRows[0]!.sellers as Array<Record<string, unknown>>).map((seller) => ({
-          id: seller.id ?? null,
-          name: seller.name ?? null,
-        }))
-      : [];
-
-    const v1Url = new URL(base + "/api/intelligent-search/v1/product-search");
-    v1Url.searchParams.set("query", term);
-    v1Url.searchParams.set("regionId", String(regionId || ""));
-    v1Url.searchParams.set("country", "BRA");
-    v1Url.searchParams.set("zip-code", postalCode);
-    v1Url.searchParams.set("sc", "1");
-    v1Url.searchParams.set("count", "5");
-    v1Url.searchParams.set("page", "1");
-    const v1Response = await fetch(v1Url, {
-      headers: { "User-Agent": "ZORVI/1.0", "Accept": "application/json" },
-      signal: AbortSignal.timeout(20000),
-    });
-    const v1Text = await v1Response.text();
-    let v1Payload: unknown = null;
-    try { v1Payload = JSON.parse(v1Text); } catch { /* no JSON */ }
-    const v1Object = v1Payload && typeof v1Payload === "object"
-      ? v1Payload as Record<string, unknown>
-      : {};
-    const v1Products = Array.isArray(v1Object.products)
-      ? v1Object.products as Array<Record<string, unknown>>
-      : [];
-    const v1First = v1Products[0] || null;
-    const v1Items = Array.isArray(v1First?.items) ? v1First!.items as Array<Record<string, unknown>> : [];
-    const v1Item = v1Items[0] || null;
-    const v1Sellers = Array.isArray(v1Item?.sellers) ? v1Item!.sellers as Array<Record<string, unknown>> : [];
-    const v1Seller = v1Sellers.find((entry) => entry.sellerDefault === true) || v1Sellers[0] || null;
-    const v1Offer = v1Seller?.commertialOffer && typeof v1Seller.commertialOffer === "object"
-      ? v1Seller.commertialOffer as Record<string, unknown>
-      : null;
-
-    const searchUrl = new URL(provider.searchUrl);
-    searchUrl.searchParams.set("ft", term);
-    searchUrl.searchParams.set("_from", "0");
-    searchUrl.searchParams.set("_to", "4");
-    const searchResponse = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "ZORVI/1.0",
-        "Accept": "application/json",
-        ...(cookieHeader ? { "Cookie": cookieHeader } : {}),
-      },
-      signal: AbortSignal.timeout(20000),
-    });
-    const searchText = await searchResponse.text();
-    let searchPayload: unknown = null;
-    try { searchPayload = JSON.parse(searchText); } catch { /* no search JSON */ }
-    const products = Array.isArray(searchPayload) ? searchPayload as Array<Record<string, unknown>> : [];
-    const first = products[0] || null;
-    const item = Array.isArray(first?.items) ? (first!.items as Array<Record<string, unknown>>)[0] : null;
-    const sellersForItem = Array.isArray(item?.sellers) ? item!.sellers as Array<Record<string, unknown>> : [];
-    const seller = sellersForItem[0] || null;
-    const offer = seller?.commertialOffer && typeof seller.commmertialOffer === "object"
-      ? seller.commmertialOffer as Record<string, unknown>
-      : seller?.commertialOffer && typeof seller.commertialOffer === "object"
-        ? seller.commertialOffer as Record<string, unknown>
-        : null;
-
+  if (preview) {
     return {
-      provider: provider.id,
-      postalCode,
-      sessionStatus: sessionResponse.status,
-      cookieNames: cookies.map((cookie) => cookie.split("=")[0]),
-      regionStatus: regionResponse.status,
-      regionId,
-      regionSellers: sellers,
-      v1Status: v1Response.status,
-      v1ProductCount: v1Products.length,
-      v1Sample: v1First ? {
-        productName: v1First.productName ?? null,
-        itemName: v1Item?.name ?? null,
-        ean: v1Item?.ean ?? null,
-        price: v1Offer?.Price ?? null,
-        listPrice: v1Offer?.ListPrice ?? null,
-        sellerId: v1Seller?.sellerId ?? null,
-        sellerName: v1Seller?.sellerName ?? null,
-        availableQuantity: v1Offer?.AvailableQuantity ?? null,
-      } : null,
-      searchStatus: searchResponse.status,
-      sample: first ? {
-        productName: first.productName ?? null,
-        itemName: item?.name ?? null,
-        ean: item?.ean ?? null,
-        price: offer?.Price ?? null,
-        sellerName: seller?.sellerName ?? null,
-        availableQuantity: offer?.AvailableQuantity ?? null,
-      } : null,
-      elapsedMs: Date.now() - startedAt,
-    };
-  } catch (error) {
-    return {
-      provider: provider.id,
-      postalCode,
-      error: error instanceof Error ? error.message : String(error),
-      elapsedMs: Date.now() - startedAt,
+      provider: provider.id, city: "Teresina", state: "PI", postalCode: provider.postalCode,
+      regionId: catalog.regionId, regionalSellers: catalog.sellers, sellerCount: catalog.sellerCount,
+      searchTerms: catalog.terms, productsFound: catalog.found, eligibleUniqueProducts: catalog.candidates.length,
+      newProductsToCreate: newProducts.length,
+      priceOffersReady: catalog.candidates.filter((c) => {
+        const p = byBarcode.get(c.barcode) || bySource.get(c.sourceProductId);
+        return !p || (p.barcode === c.barcode && p.category === provider.category && p.is_active === true);
+      }).length,
+      samples: catalog.candidates.slice(0, 8).map((c) => ({ name: c.name, brand: c.brand, barcode: c.barcode, price: c.price, priceNote: c.priceNote, sourceUrl: c.sourceUrl })),
     };
   }
+
+  for (let i = 0; i < newProducts.length; i += 100) {
+    const { error } = await admin.from("products").upsert(newProducts.slice(i, i + 100), { onConflict: "source_provider,source_product_id", ignoreDuplicates: true });
+    if (error) throw new Error("Falha ao salvar produtos do " + provider.label + ": " + error.message);
+  }
+  const refreshed = await batches(barcodes, async (part) => {
+    const { data, error } = await admin.from("products").select("id,barcode,category,is_active,source_provider,source_product_id").in("barcode", part);
+    if (error) throw new Error("Falha ao recuperar produtos importados: " + error.message);
+    return data || [];
+  });
+  const finalByBarcode = new Map(refreshed.filter((p) => p.barcode).map((p) => [String(p.barcode), p]));
+  const regionLabel = provider.id === "atacadao" && catalog.sellers.length
+    ? "Região atendida: " + catalog.sellers.join(", ") + "."
+    : "Região consultada pelo CEP " + provider.postalCode + ".";
+  const now = new Date().toISOString();
+  const priceRows: Array<Record<string, unknown>> = [];
+  for (const c of catalog.candidates) {
+    const p = finalByBarcode.get(c.barcode) || byBarcode.get(c.barcode) || bySource.get(c.sourceProductId);
+    if (!p || p.barcode !== c.barcode || p.category !== provider.category || p.is_active !== true || !storeId) continue;
+    priceRows.push({
+      store_id: storeId, product_id: p.id, price: c.price, currency: "BRL", price_type: "official_site",
+      source_url: c.sourceUrl,
+      source_label: provider.label + " · " + regionLabel + " " + c.priceNote + " Coleta automática ZORVI; preço online, sem filial física específica; estoque não confirmado.",
+      observed_at: now, availability_status: "unknown", verification_status: "verified",
+      confidence_score: 0.95, submitted_by: null,
+    });
+  }
+  const urls = [...new Set(priceRows.map((r) => String(r.source_url)))];
+  const existing = await batches(urls, async (part) => {
+    const { data, error } = await admin.from("price_observations").select("source_url,price")
+      .eq("store_id", storeId).in("source_url", part)
+      .gte("observed_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+    if (error) throw new Error("Falha ao conferir duplicatas: " + error.message);
+    return data || [];
+  });
+  const seen = new Set(existing.map((r) => String(r.source_url) + "|" + Number(r.price).toFixed(2)));
+  const toInsert = priceRows.filter((r) => {
+    const k = String(r.source_url) + "|" + Number(r.price).toFixed(2);
+    if (seen.has(k)) return false; seen.add(k); return true;
+  });
+  for (let i = 0; i < toInsert.length; i += 100) {
+    const { error } = await admin.from("price_observations").insert(toInsert.slice(i, i + 100));
+    if (error) throw new Error("Falha ao salvar preços do " + provider.label + ": " + error.message);
+  }
+  return {
+    provider: provider.id, city: "Teresina", state: "PI", postalCode: provider.postalCode,
+    regionId: catalog.regionId, regionalSellers: catalog.sellers, sellerCount: catalog.sellerCount,
+    searchTerms: catalog.terms, productsFound: catalog.found, eligibleUniqueProducts: catalog.candidates.length,
+    newProductsCreated: newProducts.length, pricesInserted: toInsert.length,
+    duplicatePricesSkipped: priceRows.length - toInsert.length,
+  };
 }
 
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  if (!await isAuthorised(request)) return json({ error: "Unauthorized" }, 401);
-
+  if (!await authorised(request)) return json({ error: "Unauthorized" }, 401);
   const body = await request.json().catch(() => ({}));
-  const requested = String(body?.source || "probe");
-  const providers = requested === "probe" || requested === "all"
-    ? PROVIDERS
-    : PROVIDERS.filter((provider) => provider.id === requested);
-  if (!providers.length) return json({ error: "Invalid source. Use probe, all, atacadao or pague_menos." }, 400);
-
-  const terms = body?.term && typeof body.term === "string"
-    ? [body.term.trim().slice(0, 80)]
-    : requested === "pague_menos" ? ["paracetamol", "dipirona"] : ["arroz", "leite"];
-  const results = await Promise.all(providers.map(async (provider) => {
-    const termResults = [];
-    for (const term of terms) termResults.push(await probe(provider, term));
-    return { provider: provider.id, terms: termResults };
-  }));
-  const atacadaoStorePages = providers.some((provider) => provider.id === "atacadao")
-    ? await probeAtacadaoStorePages()
-    : [];
-  const regionalization = body?.regionalization === true
-    ? await Promise.all([
-        probeRegionalization(PROVIDERS.find((provider) => provider.id === "atacadao")!, "64045840", "arroz"),
-        probeRegionalization(PROVIDERS.find((provider) => provider.id === "atacadao")!, "64030005", "arroz"),
-        probeRegionalization(PROVIDERS.find((provider) => provider.id === "pague_menos")!, "64049570", "paracetamol"),
-        probeRegionalization(PROVIDERS.find((provider) => provider.id === "atacadao_secure")!, "64045840", "arroz"),
-      ])
-    : [];
+  const source = String(body?.source || "all");
+  const action = String(body?.action || "sync");
+  if (!["all", "atacadao", "pague_menos"].includes(source)) return json({ error: "Fonte inválida." }, 400);
+  if (!["sync", "preview"].includes(action)) return json({ error: "Ação inválida." }, 400);
+  const selected = providers.filter((p) => source === "all" || p.id === source);
+  const startedAt = new Date().toISOString();
+  const results = [];
+  const errors: Array<{ provider: string; error: string }> = [];
+  for (const provider of selected) {
+    try { results.push(await persistCatalog(await fetchCatalog(provider), action === "preview")); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push({ provider: provider.id, error: message });
+      console.error("[retail-catalog-sync] " + provider.id + ":", message);
+    }
+  }
   return json({
-    success: true,
-    mode: "read_only_probe",
-    checkedAt: new Date().toISOString(),
-    results,
-    atacadaoStorePages,
-    regionalization,
-    note: "This diagnostic request does not create or change products, prices, stores or approvals.",
-  });
+    success: errors.length === 0, action, city: "Teresina", state: "PI", startedAt,
+    finishedAt: new Date().toISOString(), results, errors,
+    note: "Ofertas online regionalizadas; não atribuídas a filiais físicas. Estoque em loja não confirmado.",
+  }, errors.length ? 207 : 200);
 });
