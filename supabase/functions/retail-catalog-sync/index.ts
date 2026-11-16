@@ -566,6 +566,6 @@ Deno.serve(async (request: Request) => {
   return json({
     success: errors.length === 0, action, city: "Teresina", state: "PI", startedAt,
     finishedAt: new Date().toISOString(), results, errors,
-    note: "Ofertas online regionalizadas; não atribuídas a filiais físicas. Estoque em loja não confirmado.",
+    note: "Ofertas dos catálogos online oficiais; cada canal é separado de lojas físicas. Estoque em filial física não confirmado.",
   }, errors.length ? 207 : 200);
 });

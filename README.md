@@ -138,6 +138,8 @@ A função `price-review` exige JWT de uma sessão autenticada e valida o token 
 
 - **Atacadão Online:** pesquisa regionalizada para o CEP 64045-840, somente vendedor oficial ATACADAO SA. O importador usa preço regular de tabela e não presume descontos por quantidade.
 - **Pague Menos Online:** pesquisa regionalizada para o CEP 64049-570, somente vendedor oficial Farmácias Pague Menos; ofertas de marketplace de terceiros são descartadas.
-- Os canais digitais não têm coordenadas e não aparecem como pinos físicos no mapa. As ofertas são identificadas como online, com fonte e data de coleta; estoque em filial física não é presumido.
-- Sincronização diária às 06:30 no horário de Teresina (09:30 UTC).
+- **Carvalho Supershop** e **Ferreira em Casa:** coleta dos catálogos oficiais VipCommerce, identificando organização, filial digital e centro de distribuição. Importa produtos disponíveis com EAN válido e considera preço promocional apenas quando a condição é unitária; faixas de preço por quantidade são ignoradas.
+- Os quatro canais digitais são registros separados de lojas físicas, não recebem coordenadas e não aparecem como pinos no mapa. Preços são identificados como ofertas online; estoque em uma filial física não é presumido.
+- A sincronização automática continua diária às 06:30 no horário de Teresina (09:30 UTC), executando todas as fontes ativas.
+- **Drogasil:** ainda pendente de credenciais oficiais. O portal da RD Saúde exige conta de desenvolvedor, credenciais de aplicação e liberação de produção; não foi ativado scraper pago ou acesso não autorizado.
 
