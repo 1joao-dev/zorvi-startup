@@ -204,7 +204,7 @@ function searchTokens(value: string): string[] {
     .replace(/(\d)([a-z])/g, "$1 $2")
     .replace(/([a-z])(\d)/g, "$1 $2")
     .split(/\s+/)
-    .filter((token) => (token.length >= 2 || ["g", "c", "m", "p"].includes(token)) && !stopWords.has(token));
+    .filter((token) => (token.length >= 2 || /^\d+$/.test(token) || ["g", "c", "m", "p"].includes(token)) && !stopWords.has(token));
 }
 
 const productFollowUpTerms = new Set([
@@ -256,8 +256,8 @@ function findMatchingProducts(
       const matchedTokens = tokens.filter((token) => searchableTokens.has(token));
       const brandMatches = tokens.filter((token) => brandTokens.has(token));
       const coverage = matchedTokens.length / tokens.length;
-      const queryNumbers = tokens.filter((token) => /^\d{2,}$/.test(token));
-      const productNumbers = productTokens.filter((token) => /^\d{2,}$/.test(token));
+      const queryNumbers = tokens.filter((token) => /^\d+$/.test(token));
+      const productNumbers = productTokens.filter((token) => /^\d+$/.test(token));
       const querySizes = tokens.filter((token) => presentationSizeTokens.has(token));
       const productSizes = productTokens.filter((token) => presentationSizeTokens.has(token));
       const conflictingNumber = queryNumbers.some((token) => productNumbers.length > 0 && !productNumbers.includes(token));
@@ -292,7 +292,7 @@ async function discoverOpenFoodFactsProducts(
   question: string,
 ): Promise<{ products: ProductRow[]; aliases: ProductAliasRow[] }> {
   const searchTerm = searchTokens(question)
-    .filter((token) => token.length >= 3 || /^\d{2,}$/.test(token))
+    .filter((token) => token.length >= 3 || /^\d+$/.test(token))
     .slice(0, 6)
     .join(" ")
     .trim();
@@ -741,7 +741,7 @@ Deno.serve(async (request: Request) => {
   const freshnessCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const productSearchQuestion = buildProductSearchQuestion(messages);
   const searchTerms = searchTokens(productSearchQuestion)
-    .filter((token) => token.length >= 3 || /^\d{2,}$/.test(token))
+    .filter((token) => token.length >= 3 || /^\d+$/.test(token))
     .join(" ");
   const normalizedLastQuestion = normalize(lastMessage.content);
   const [summaryResult, storesResult, pricesResult] = await Promise.all([
