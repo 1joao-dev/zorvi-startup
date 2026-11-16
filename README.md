@@ -70,6 +70,9 @@ Depois de clonar o repositório e instalar as dependências com `npm install`, e
 ```powershell
 $env:SUPABASE_URL="https://SEU-PROJETO.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY="SUA_CHAVE_SERVICE_ROLE"
+npm run catalog:sync:all
+
+# Ou execute separadamente:
 npm run catalog:sync:open-food-facts
 npm run catalog:sync:anvisa
 ```
