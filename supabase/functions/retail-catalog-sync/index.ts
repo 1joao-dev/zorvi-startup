@@ -39,6 +39,12 @@ const PROVIDERS: Provider[] = [
     domain: "www.paguemenos.com.br",
     searchUrl: "https://www.paguemenos.com.br/api/catalog_system/pub/products/search",
   },
+  {
+    id: "atacadao_secure",
+    label: "Atacadão (domínio de e-commerce)",
+    domain: "secure.atacadao.com.br",
+    searchUrl: "https://secure.atacadao.com.br/api/catalog_system/pub/products/search",
+  },
 ];
 
 async function isAuthorised(request: Request): Promise<boolean> {
@@ -346,9 +352,10 @@ Deno.serve(async (request: Request) => {
     : [];
   const regionalization = body?.regionalization === true
     ? await Promise.all([
-        probeRegionalization(PROVIDERS[0], "64045840", "arroz"),
-        probeRegionalization(PROVIDERS[0], "64030005", "arroz"),
-        probeRegionalization(PROVIDERS[1], "64049570", "paracetamol"),
+        probeRegionalization(PROVIDERS.find((provider) => provider.id === "atacadao")!, "64045840", "arroz"),
+        probeRegionalization(PROVIDERS.find((provider) => provider.id === "atacadao")!, "64030005", "arroz"),
+        probeRegionalization(PROVIDERS.find((provider) => provider.id === "pague_menos")!, "64049570", "paracetamol"),
+        probeRegionalization(PROVIDERS.find((provider) => provider.id === "atacadao_secure")!, "64045840", "arroz"),
       ])
     : [];
   return json({
