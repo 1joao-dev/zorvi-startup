@@ -198,6 +198,25 @@ async function persistCatalog(catalog: Awaited<ReturnType<typeof fetchCatalog>>,
     return data || [];
   });
   const finalByBarcode = new Map(refreshed.filter((p) => p.barcode).map((p) => [String(p.barcode), p]));
+  const aliasRows: Array<Record<string, unknown>> = [];
+  for (const candidate of catalog.candidates) {
+    const product = finalByBarcode.get(candidate.barcode) || byBarcode.get(candidate.barcode) || bySource.get(candidate.sourceProductId);
+    if (!product || product.barcode !== candidate.barcode || product.category !== provider.category || product.is_active !== true) continue;
+    aliasRows.push({
+      product_id: product.id,
+      alias: candidate.name,
+      normalized_alias: normalize(candidate.name),
+      source_provider: provider.id,
+    });
+  }
+  if (aliasRows.length) {
+    const { error } = await admin.from("product_aliases").upsert(aliasRows, {
+      onConflict: "product_id,normalized_alias",
+      ignoreDuplicates: true,
+    });
+    if (error) throw new Error("Falha ao salvar nomes alternativos do " + provider.label + ": " + error.message);
+  }
+
   const regionLabel = provider.id === "atacadao" && catalog.sellers.length
     ? "Região atendida: " + catalog.sellers.join(", ") + "."
     : "Região consultada pelo CEP " + provider.postalCode + ".";
