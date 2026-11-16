@@ -51,10 +51,10 @@ async function importSearch(term) {
   if (!response.ok) throw new Error("Open Food Facts respondeu HTTP " + response.status + " para: " + term);
 
   const payload = await response.json();
-  const products = (payload.products || [])
+  const products = [...new Map((payload.products || [])
     .filter((item) => item.code && item.product_name?.trim())
     .filter((item) => !item.countries_tags?.length || item.countries_tags.some((tag) => normalize(tag).includes("brazil")))
-    .slice(0, 80);
+    .map((item) => [item.code, item])).values()].slice(0, 80);
 
   if (!products.length) {
     console.log("Sem resultados brasileiros para:", term);
