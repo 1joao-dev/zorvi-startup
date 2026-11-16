@@ -998,7 +998,9 @@ Deno.serve(async (request: Request) => {
       started_at: startedAt,
       finished_at: new Date().toISOString(),
       results,
-      note: "Imported catalog metadata only. No store prices, availability or stock were created or verified.",
+      note: source === "open_prices"
+        ? "Evidence-backed community price observations may be imported when exact store, product barcode and location matches are found. Availability is never inferred."
+        : "Imported product catalog metadata only. Product metadata does not confirm store price, availability or stock.",
     });
   } catch (error) {
     console.error("[catalog-import] Import failed:", error instanceof Error ? error.message : String(error));
