@@ -262,7 +262,8 @@ function buildCatalogFallback(
   location: LocationContext,
 ): string {
   const normalizedQuestion = normalize(question);
-  const asksForStores = /\b(farmacia|farmacias|mercado|supermercado|loja|estabelecimento|perto|proximo|proximos)\b/.test(normalizedQuestion);
+  const asksForStores = /\b(farmacia|farmacias|mercado|supermercado|loja|lojas|estabelecimento|estabelecimentos|perto|proximo|proximos)\b/.test(normalizedQuestion);
+  const asksForStoreAddresses = /\b(endereco|enderecos|farmacia|farmacias|loja|lojas|estabelecimento|estabelecimentos)\b/.test(normalizedQuestion);
   const asksForOffers = /\b(oferta|ofertas|promocao|promocoes|desconto|descontos)\b/.test(normalizedQuestion);
 
   if (matchingProducts.length > 0) {
@@ -279,9 +280,46 @@ function buildCatalogFallback(
         + (first.priceType === "estimated" ? "Esse valor é uma estimativa baseada na fonte. " : "")
         + "Confira a disponibilidade diretamente com o estabelecimento antes de comprar.";
     }
-    return "Encontrei " + productNames.join("; ") + " no catálogo da ZORVI, mas ainda não há preço verificado disponível para esse produto na região consultada. "
-      + "Não vou inventar valores nem indicar uma loja como a mais barata. "
-      + "Quando houver preços confirmados, poderei comparar as opções.";
+    const noPriceMessage = "Encontrei " + productNames.join("; ") + " no catálogo da ZORVI, mas ainda não há preço verificado disponível para esse produto"
+      + (location.city ? " em " + location.city + (location.state ? " - " + location.state : "") : " no catálogo consultado") + ". "
+      + "Não vou inventar valores nem indicar uma loja como a mais barata.";
+
+    if (asksForStoreAddresses) {
+      if (!location.city && !hasReliableDistance(location)) {
+        return noPriceMessage + " Para mostrar endereços da sua região, selecione cidade e estado ou permita uma localização precisa.";
+      }
+
+      const addressStores = stores
+        .map((store) => ({
+          store,
+          distance: hasReliableDistance(location) && store.latitude !== null && store.longitude !== null
+            ? distanceKm(location.latitude as number, location.longitude as number, store.latitude, store.longitude)
+            : null,
+        }))
+        .filter((item) => !hasReliableDistance(location) || (item.distance !== null && item.distance <= 20))
+        .sort((a, b) => {
+          if (a.distance !== null && b.distance !== null) return a.distance - b.distance;
+          return a.store.name.localeCompare(b.store.name, "pt-BR");
+        })
+        .slice(0, 5);
+
+      if (addressStores.length === 0) {
+        return noPriceMessage + " Não encontrei estabelecimentos verificados nessa região.";
+      }
+
+      const regionLabel = location.city
+        ? location.city + (location.state ? " - " + location.state : "")
+        : "a área da localização selecionada";
+      const addressList = addressStores.map(({ store }) =>
+        store.name + ": " + store.address + ", " + store.city + " - " + store.state
+      ).join(" | ");
+
+      return noPriceMessage + " Endereços de estabelecimentos verificados cadastrados em "
+        + regionLabel + ": " + addressList + ". "
+        + "A confirmação do endereço não significa que o produto tenha estoque ou preço disponível nessas unidades.";
+    }
+
+    return noPriceMessage + " Quando houver preços confirmados, poderei comparar as opções.";
   }
 
   if (asksForOffers && results.length > 0) {
@@ -404,6 +442,7 @@ Deno.serve(async (request: Request) => {
     admin.from("stores")
       .select("id,name,category,address,city,state,latitude,longitude,verification_status")
       .eq("verification_status", "verified")
+      .order("name", { ascending: true })
       .limit(100),
     admin.from("price_observations")
       .select("id,product_id,store_id,price,currency,price_type,source_url,source_label,observed_at,availability_status,verification_status,products!inner(id,name,normalized_name,brand,variant,unit,category),stores!inner(id,name,category,address,city,state,latitude,longitude,verification_status)")
