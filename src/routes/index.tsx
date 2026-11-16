@@ -1030,7 +1030,9 @@ mapPrice: result ? Number(result.price) : null,
         });
       if (error) throw error;
 
-      const uniqueProducts = [...new Map(((data || []) as CatalogProduct[]).map((product) => [product.id, product])).values()];
+      const uniqueProducts = Array.from(new Map<string, CatalogProduct>(
+        ((data || []) as CatalogProduct[]).map((product): [string, CatalogProduct] => [product.id, product])
+      ).values());
       if (!uniqueProducts.length) {
         setSearchProductCategory(null);
         notify("Não encontrei esse produto no catálogo. Tente informar marca, tamanho, quantidade ou código de barras.");
@@ -1378,8 +1380,8 @@ mapPrice: result ? Number(result.price) : null,
           <div className="map-search-row">
             <div className="map-search">
               <Search size={18}/>
-              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?" aria-label="Buscar produto"/>
-              {query && <button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSelectedMapStore(null);}} aria-label="Limpar busca"><X size={16}/></button>}
+              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?" aria-label="Buscar produto"/>
+              {query && <button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} aria-label="Limpar busca"><X size={16}/></button>}
             </div>
             <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>
               {catalogLoading ? <span className="map-button-loading"/> : <Search size={16}/>}
