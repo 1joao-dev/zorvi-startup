@@ -442,10 +442,12 @@ Deno.serve(async (request: Request) => {
     ? await admin.from("stores")
       .select("id,name,brand_name,address,city,state,category,latitude,longitude,geocode_attempted_at,google_checked_at,created_at")
       .eq("verification_status", "verified")
+      .or("coordinate_source.is.null,coordinate_source.neq.online_catalog")
       .order("created_at", { ascending: true })
       .limit(500)
     : await admin.from("stores")
       .select("id,name,brand_name,address,city,state,category,latitude,longitude,geocode_attempted_at,google_checked_at,created_at")
+      .or("coordinate_source.is.null,coordinate_source.neq.online_catalog")
       .order("created_at", { ascending: true })
       .limit(500);
   const { data: catalogStores, error: queryError } = queryResult;

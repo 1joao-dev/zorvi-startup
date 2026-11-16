@@ -37,6 +37,7 @@ type StoreRow = {
   latitude: number | null;
   longitude: number | null;
   verification_status: string;
+  coordinate_source?: string | null;
 };
 
 type StoreContextRow = StoreRow & { distanceKm: number | null };
@@ -95,6 +96,7 @@ type ChatResult = {
   observedAt: string;
   availabilityStatus: "available" | "unknown";
   distanceKm: number | null;
+  isOnline: boolean;
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -499,11 +501,13 @@ function buildStoreContext(
   if (/\b(restaurante|restaurantes|lanchonete|lanchonetes)\b/.test(normalizedQuestion)) requestedCategories.push("Restaurante");
   if (/\b(loja|lojas)\b/.test(normalizedQuestion)) requestedCategories.push("Lojas");
 
-  let filtered = requestedCategories.length
-    ? stores.filter((store) => requestedCategories.includes(store.category))
-    : selectedProduct
-      ? stores.filter((store) => store.category === selectedProduct.category)
-      : stores;
+  let filtered = stores
+    .filter((store) => store.coordinate_source !== "online_catalog")
+    .filter((store) => requestedCategories.length
+      ? requestedCategories.includes(store.category)
+      : selectedProduct
+        ? store.category === selectedProduct.category
+        : true);
 
   const questionTokens = new Set(searchTokens(question));
   const namedStores = filtered.filter((store) =>
@@ -525,6 +529,7 @@ function buildStoreContext(
       return {
         ...store,
         distanceKm: distance !== null && Number.isFinite(distance) ? Number(distance.toFixed(2)) : null,
+        isOnline: store.coordinate_source === "online_catalog",
       };
     })
     .filter((store) => !reliableDistance || store.distanceKm === null || store.distanceKm <= 20)
@@ -547,6 +552,7 @@ function mapChatResults(
       && row.products && row.stores
       && row.stores.verification_status === "verified")
     .filter((row) => storeMatchesRegion(row.stores as StoreRow, location))
+    .filter((row) => row.stores?.coordinate_source !== "online_catalog" || Boolean(location.city && location.state))
     .map((row) => {
       const store = row.stores as StoreRow;
       const distance = reliableDistance && store.latitude !== null && store.longitude !== null
@@ -781,7 +787,7 @@ Deno.serve(async (request: Request) => {
   const [summaryResult, storesResult, pricesResult] = await Promise.all([
     admin.rpc("get_product_catalog_summary"),
     admin.from("stores")
-      .select("id,name,category,address,city,state,latitude,longitude,verification_status")
+      .select("id,name,category,address,city,state,latitude,longitude,verification_status,coordinate_source")
       .eq("verification_status", "verified")
       .order("name", { ascending: true })
       .limit(100),
@@ -984,6 +990,7 @@ Deno.serve(async (request: Request) => {
       observed_at: result.observedAt,
       availability_status: result.availabilityStatus,
       distance_km: result.distanceKm,
+       is_online: result.isOnline,
     })),
     verified_price_count: results.length,
     price_window_days: 30,
