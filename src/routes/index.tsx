@@ -1070,12 +1070,18 @@ mapPrice: result ? Number(result.price) : null,
       notify("Pesquise e selecione um produto primeiro.");
       return;
     }
-    const availableStores = mapStores.length ? mapStores : nearbyStores;
+    const availableStores = (mapStores.length ? mapStores : nearbyStores)
+      .filter((store) => store.category === selectedPriceProduct.category);
     if (!availableStores.length) {
-      notify("Não há estabelecimentos cadastrados nesta região.");
+      notify("Não há estabelecimentos desta categoria cadastrados nesta região.");
       return;
     }
-    setPriceReportStoreId(storeId || selectedMapStore?.id || availableStores[0].id);
+    const preferredStoreId = storeId && availableStores.some((store) => store.id === storeId)
+      ? storeId
+      : selectedMapStore && availableStores.some((store) => store.id === selectedMapStore.id)
+        ? selectedMapStore.id
+        : availableStores[0].id;
+    setPriceReportStoreId(preferredStoreId);
     setPriceReportValue("");
     setPriceReportSourceUrl("");
     setPriceReportAvailability("unknown");
@@ -1543,7 +1549,7 @@ mapPrice: result ? Number(result.price) : null,
         <div className="price-report-product"><small>PRODUTO SELECIONADO</small><b>{selectedPriceProduct?.name}</b><span>{[selectedPriceProduct?.brand,selectedPriceProduct?.variant,selectedPriceProduct?.unit].filter(Boolean).join(" · ")}</span></div>
         <label className="profile-form-label">Estabelecimento
           <select value={priceReportStoreId} onChange={(event) => setPriceReportStoreId(event.target.value)}>
-            {(mapStores.length ? mapStores : nearbyStores).map((store) => <option key={store.id} value={store.id}>{store.brand_name || store.name} · {store.address}</option>)}
+            {(mapStores.length ? mapStores : nearbyStores).filter((store) => store.category === selectedPriceProduct?.category).map((store) => <option key={store.id} value={store.id}>{store.brand_name || store.name} · {store.address}</option>)}
           </select>
         </label>
         <label className="profile-form-label">Preço observado (R$)
