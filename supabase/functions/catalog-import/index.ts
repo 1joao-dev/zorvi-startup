@@ -52,7 +52,6 @@ const OPF_SEARCHES = [
 
 const OPEN_FACTS_FIELDS = "code,product_name,brands,quantity,categories_tags,countries_tags,image_front_url,last_modified_t";
 
-const OFF_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 const ANVISA_URL = "https://dados.anvisa.gov.br/dados/DADOS_ABERTOS_MEDICAMENTOS.csv";
 
 const normalize = (value: unknown) => String(value || "")
@@ -158,17 +157,6 @@ async function fetchOpenFoodFactsSearch(url: URL, term: string) {
   }
   throw new Error("Open Food Facts returned HTTP " + lastStatus + " for " + term + " after retries");
 }
-
-type OpenFactsProduct = {
-  code?: string;
-  product_name?: string;
-  brands?: string;
-  quantity?: string;
-  categories_tags?: string[];
-  countries_tags?: string[];
-  image_front_url?: string;
-  last_modified_t?: number;
-};
 
 async function importOpenFactsProvider(config: {
   provider: string;
@@ -561,7 +549,8 @@ function matchOpenPricesStore(location: {
   const locationText = normalizeStoreName([location.osm_name, location.osm_display_name].filter(Boolean).join(" "));
   const locationCity = normalizeStoreName(location.osm_address_city || "");
   const country = normalizeStoreName(location.osm_address_country_code || "");
-  if (!locationText || !Number.isFinite(Number(location.osm_lat)) || !Number.isFinite(Number(location.osm_lon))) return null;
+  if (!locationText || location.osm_lat === null || location.osm_lat === undefined || location.osm_lon === null || location.osm_lon === undefined
+    || !Number.isFinite(Number(location.osm_lat)) || !Number.isFinite(Number(location.osm_lon))) return null;
   if (country && country !== "br" && !country.includes("brazil")) return null;
 
   const candidates = stores.map((store) => {
@@ -596,8 +585,9 @@ async function importOpenPrices() {
     .limit(1000);
   if (storeError) throw new Error("Could not load stores for Open Prices matching: " + storeError.message);
 
-  const regions = new Map<string, typeof stores>();
-  (stores || []).filter((store) => store.latitude !== null && store.longitude !== null).forEach((store) => {
+  const storeRows = stores || [];
+  const regions = new Map<string, typeof storeRows>();
+  storeRows.filter((store) => store.latitude !== null && store.longitude !== null).forEach((store) => {
     const key = normalizeStoreName(store.city) + "|" + normalizeStoreName(store.state);
     const current = regions.get(key) || [];
     current.push(store);
