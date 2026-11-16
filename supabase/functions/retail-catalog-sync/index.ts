@@ -224,6 +224,36 @@ async function probeRegionalization(provider: Provider, postalCode: string, term
         }))
       : [];
 
+    const v1Url = new URL(base + "/api/intelligent-search/v1/product-search");
+    v1Url.searchParams.set("query", term);
+    v1Url.searchParams.set("regionId", String(regionId || ""));
+    v1Url.searchParams.set("country", "BRA");
+    v1Url.searchParams.set("zip-code", postalCode);
+    v1Url.searchParams.set("sc", "1");
+    v1Url.searchParams.set("count", "5");
+    v1Url.searchParams.set("page", "1");
+    const v1Response = await fetch(v1Url, {
+      headers: { "User-Agent": "ZORVI/1.0", "Accept": "application/json" },
+      signal: AbortSignal.timeout(20000),
+    });
+    const v1Text = await v1Response.text();
+    let v1Payload: unknown = null;
+    try { v1Payload = JSON.parse(v1Text); } catch { /* no JSON */ }
+    const v1Object = v1Payload && typeof v1Payload === "object"
+      ? v1Payload as Record<string, unknown>
+      : {};
+    const v1Products = Array.isArray(v1Object.products)
+      ? v1Object.products as Array<Record<string, unknown>>
+      : [];
+    const v1First = v1Products[0] || null;
+    const v1Items = Array.isArray(v1First?.items) ? v1First!.items as Array<Record<string, unknown>> : [];
+    const v1Item = v1Items[0] || null;
+    const v1Sellers = Array.isArray(v1Item?.sellers) ? v1Item!.sellers as Array<Record<string, unknown>> : [];
+    const v1Seller = v1Sellers.find((entry) => entry.sellerDefault === true) || v1Sellers[0] || null;
+    const v1Offer = v1Seller?.commertialOffer && typeof v1Seller.commertialOffer === "object"
+      ? v1Seller.commertialOffer as Record<string, unknown>
+      : null;
+
     const searchUrl = new URL(provider.searchUrl);
     searchUrl.searchParams.set("ft", term);
     searchUrl.searchParams.set("_from", "0");
@@ -258,6 +288,18 @@ async function probeRegionalization(provider: Provider, postalCode: string, term
       regionStatus: regionResponse.status,
       regionId,
       regionSellers: sellers,
+      v1Status: v1Response.status,
+      v1ProductCount: v1Products.length,
+      v1Sample: v1First ? {
+        productName: v1First.productName ?? null,
+        itemName: v1Item?.name ?? null,
+        ean: v1Item?.ean ?? null,
+        price: v1Offer?.Price ?? null,
+        listPrice: v1Offer?.ListPrice ?? null,
+        sellerId: v1Seller?.sellerId ?? null,
+        sellerName: v1Seller?.sellerName ?? null,
+        availableQuantity: v1Offer?.AvailableQuantity ?? null,
+      } : null,
       searchStatus: searchResponse.status,
       sample: first ? {
         productName: first.productName ?? null,
