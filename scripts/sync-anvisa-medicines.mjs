@@ -82,9 +82,10 @@ function findColumn(headers, candidates) {
 
 async function flushBatch(batch) {
   if (!batch.length) return 0;
+  const uniqueBatch = [...new Map(batch.map((row) => [row.source_product_id, row])).values()];
   const { data: saved, error } = await supabase
     .from("products")
-    .upsert(batch, { onConflict: "source_provider,source_product_id" })
+    .upsert(uniqueBatch, { onConflict: "source_provider,source_product_id" })
     .select("id,name,brand,variant,source_product_id");
   if (error) throw error;
 
