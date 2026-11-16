@@ -57,6 +57,7 @@ async function isAuthorised(request: Request): Promise<boolean> {
 async function saveAliases(
   products: Array<{ id: string; name: string; brand?: string | null; variant?: string | null }>,
   provider: string,
+  includeBrand = true,
 ): Promise<number> {
   const aliases = new Map<string, {
     product_id: string;
@@ -68,9 +69,9 @@ async function saveAliases(
   for (const product of products) {
     const candidates = [
       product.name,
-      product.brand,
+      ...(includeBrand ? [product.brand] : []),
       product.variant,
-      [product.brand, product.name].filter(Boolean).join(" "),
+      ...(includeBrand ? [[product.brand, product.name].filter(Boolean).join(" ")] : []),
     ];
     for (const candidate of candidates) {
       if (!candidate) continue;
@@ -96,10 +97,41 @@ async function saveAliases(
   return rows.length;
 }
 
+async function fetchOpenFoodFactsSearch(url: URL, term: string) {
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
+        "Accept": "application/json",
+      },
+      signal: AbortSignal.timeout(25000),
+    });
+    if (response.ok) {
+      return await response.json() as {
+        products?: Array<{
+          code?: string;
+          product_name?: string;
+          brands?: string;
+          quantity?: string;
+          categories_tags?: string[];
+          countries_tags?: string[];
+          image_front_url?: string;
+          last_modified_t?: number;
+        }>;
+      };
+    }
+    lastStatus = response.status;
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 2) break;
+    await sleep((attempt + 1) * 7000);
+  }
+  throw new Error("Open Food Facts returned HTTP " + lastStatus + " for " + term + " after retries");
+}
+
 async function importOpenFoodFacts() {
   let imported = 0;
   let aliasCount = 0;
-  const termResults: Array<{ term: string; found: number; imported: number }> = [];
+  const termResults: Array<{ term: string; found: number; imported: number; warning?: string }> = [];
 
   for (let index = 0; index < OFF_SEARCHES.length; index += 1) {
     const term = OFF_SEARCHES[index];
@@ -117,29 +149,16 @@ async function importOpenFoodFacts() {
     url.searchParams.set("tag_contains_0", "contains");
     url.searchParams.set("tag_0", "en:brazil");
 
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
-        "Accept": "application/json",
-      },
-      signal: AbortSignal.timeout(25000),
-    });
-    if (!response.ok) {
-      throw new Error("Open Food Facts returned HTTP " + response.status + " for " + term);
+    let payload: Awaited<ReturnType<typeof fetchOpenFoodFactsSearch>>;
+    try {
+      payload = await fetchOpenFoodFactsSearch(url, term);
+    } catch (error) {
+      const warning = error instanceof Error ? error.message : String(error);
+      console.warn("[catalog-import] Skipping Open Food Facts term:", term, warning);
+      termResults.push({ term, found: 0, imported: 0, warning });
+      if (index < OFF_SEARCHES.length - 1) await sleep(8500);
+      continue;
     }
-
-    const payload = await response.json() as {
-      products?: Array<{
-        code?: string;
-        product_name?: string;
-        brands?: string;
-        quantity?: string;
-        categories_tags?: string[];
-        countries_tags?: string[];
-        image_front_url?: string;
-        last_modified_t?: number;
-      }>;
-    };
 
     const externalProducts = [...new Map((payload.products || [])
       .filter((item) => Boolean(item.code && item.product_name?.trim()))
@@ -151,7 +170,7 @@ async function importOpenFoodFacts() {
 
     if (!externalProducts.length) {
       termResults.push({ term, found: 0, imported: 0 });
-      if (index < OFF_SEARCHES.length - 1) await sleep(6500);
+      if (index < OFF_SEARCHES.length - 1) await sleep(8500);
       continue;
     }
 
@@ -208,10 +227,15 @@ async function importOpenFoodFacts() {
     }
 
     termResults.push({ term, found: externalProducts.length, imported: saved.length });
-    if (index < OFF_SEARCHES.length - 1) await sleep(6500);
+    if (index < OFF_SEARCHES.length - 1) await sleep(8500);
   }
 
-  return { imported, aliases: aliasCount, searches: termResults };
+  return {
+    imported,
+    aliases: aliasCount,
+    searches: termResults,
+    failedSearches: termResults.filter((item) => Boolean(item.warning)).length,
+  };
 }
 
 function* parseCsvRows(text: string, delimiter: string): Generator<string[]> {
@@ -286,7 +310,7 @@ async function flushAnvisaBatch(batch: Array<Record<string, unknown>>) {
     name: string;
     brand: string | null;
     variant: string | null;
-  }>, "anvisa");
+  }>, "anvisa", false);
   return { products: data?.length || 0, aliases };
 }
 
@@ -381,7 +405,7 @@ async function importAnvisa() {
     });
 
     rowsProcessed += 1;
-    if (batch.length >= 350) await flush();
+    if (batch.length >= 700) await flush();
   }
 
   await flush();
