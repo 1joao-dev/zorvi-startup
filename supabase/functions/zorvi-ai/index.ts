@@ -291,7 +291,11 @@ async function discoverOpenFoodFactsProducts(
   admin: ReturnType<typeof createClient>,
   question: string,
 ): Promise<{ products: ProductRow[]; aliases: ProductAliasRow[] }> {
-  const searchTerm = searchTokens(question).slice(0, 6).join(" ").trim();
+  const searchTerm = searchTokens(question)
+    .filter((token) => token.length >= 3 || /^\d{2,}$/.test(token))
+    .slice(0, 6)
+    .join(" ")
+    .trim();
   if (!searchTerm) return { products: [], aliases: [] };
 
   const queryKey = normalize(searchTerm);
@@ -740,9 +744,6 @@ Deno.serve(async (request: Request) => {
     .filter((token) => token.length >= 3 || /^\d{2,}$/.test(token))
     .join(" ");
   const normalizedLastQuestion = normalize(lastMessage.content);
-  const asksForProductList = /\b(produto|produtos|catalogo|lista|listar)\b/.test(normalizedLastQuestion)
-    && /\b(quais|lista|listar|catalogo|existem|temos|cadastrados|cadastradas|mostre|mostrar)\b/.test(normalizedLastQuestion);
-
   const [summaryResult, storesResult, pricesResult] = await Promise.all([
     admin.rpc("get_product_catalog_summary"),
     admin.from("stores")
