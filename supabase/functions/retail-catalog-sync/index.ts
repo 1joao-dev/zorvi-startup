@@ -14,30 +14,63 @@ if (!url || !key) throw new Error("Missing Supabase server environment variables
 const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
 type Provider = {
-  id: "atacadao" | "pague_menos"; label: string; base: string; domain: string;
-  postalCode: string; category: "Mercado" | "Farmácia"; sellerId: string; sellerName: string;
-  storeName: string; priceMode: "regular" | "current"; terms: string[];
+  id: "atacadao" | "pague_menos" | "carvalho_super" | "ferreira_super";
+  platform: "vtex" | "vipcommerce";
+  label: string;
+  base: string;
+  domain: string;
+  postalCode: string | null;
+  category: "Mercado" | "Farmácia";
+  sellerId?: string;
+  sellerName?: string;
+  storeName: string;
+  priceMode?: "regular" | "current";
+  terms: string[];
 };
 type Candidate = {
   provider: Provider; sourceProductId: string; barcode: string; name: string;
   brand: string | null; unit: string | null; subcategory: string | null;
   imageUrl: string | null; sourceUrl: string; price: number; priceNote: string;
 };
+type CatalogResult = {
+  provider: Provider;
+  regionId: string;
+  sellers: string[];
+  sellerCount: number;
+  found: number;
+  skipped: number;
+  terms: Array<Record<string, unknown>>;
+  candidates: Candidate[];
+};
 
 const providers: Provider[] = [
   {
-    id: "atacadao", label: "Atacadão", base: "https://secure.atacadao.com.br",
+    id: "atacadao", platform: "vtex", label: "Atacadão", base: "https://secure.atacadao.com.br",
     domain: "secure.atacadao.com.br", postalCode: "64045840", category: "Mercado",
     sellerId: "1", sellerName: "ATACADAO SA", storeName: "Atacadão Online — Teresina (CEP 64045-840)",
     priceMode: "regular",
     terms: ["arroz", "feijão", "leite", "café", "macarrão", "óleo de soja", "açúcar", "ovos", "detergente", "papel higiênico"],
   },
   {
-    id: "pague_menos", label: "Farmácias Pague Menos", base: "https://www.paguemenos.com.br",
+    id: "pague_menos", platform: "vtex", label: "Farmácias Pague Menos", base: "https://www.paguemenos.com.br",
     domain: "www.paguemenos.com.br", postalCode: "64049570", category: "Farmácia",
     sellerId: "1", sellerName: "Farmácias Pague Menos",
     storeName: "Pague Menos Online — Teresina (CEP 64049-570)", priceMode: "current",
     terms: ["paracetamol", "dipirona", "ibuprofeno", "protetor solar", "shampoo", "desodorante", "sabonete", "creme dental", "fralda", "absorvente"],
+  },
+  {
+    id: "carvalho_super", platform: "vipcommerce", label: "Carvalho Supershop",
+    base: "https://www.carvalhosupershop.com.br", domain: "carvalhosupershop.com.br",
+    postalCode: null, category: "Mercado",
+    storeName: "Carvalho Supershop Online — Teresina",
+    terms: ["arroz", "feijão", "leite", "café", "macarrão", "óleo", "açúcar", "ovos", "detergente", "papel higiênico"],
+  },
+  {
+    id: "ferreira_super", platform: "vipcommerce", label: "Ferreira em Casa",
+    base: "https://www.ferreiraemcasa.com.br", domain: "ferreiraemcasa.com.br",
+    postalCode: null, category: "Mercado",
+    storeName: "Ferreira em Casa Online — Teresina",
+    terms: ["arroz", "feijão", "leite", "café", "macarrão", "óleo", "açúcar", "ovos", "detergente", "papel higiênico"],
   },
 ];
 
@@ -63,6 +96,9 @@ async function authorised(request: Request) {
   return !error && data === true;
 }
 async function regionFor(provider: Provider) {
+  if (provider.platform !== "vtex" || !provider.postalCode || !provider.sellerId || !provider.sellerName) {
+    throw new Error("Configuração VTEX incompleta para " + provider.id);
+  }
   const u = new URL(provider.base + "/api/checkout/pub/regions");
   u.searchParams.set("country", "BRA"); u.searchParams.set("postalCode", provider.postalCode);
   const response = await fetch(u, { headers: { Accept: "application/json", "User-Agent": "ZORVI/1.0" }, signal: AbortSignal.timeout(20000) });
@@ -94,7 +130,7 @@ async function search(provider: Provider, regionId: string, term: string) {
     const barcode = String(item.ean || "").replace(/\D/g, "");
     if (!/^\d{8,14}$/.test(barcode)) { skipped++; continue; }
     const sellerRows = Array.isArray(item.sellers) ? item.sellers as Array<Record<string, unknown>> : [];
-    const seller = sellerRows.find((s) => String(s.sellerId || "") === provider.sellerId && normalize(s.sellerName) === normalize(provider.sellerName));
+    const seller = sellerRows.find((s) => String(s.sellerId || "") === String(provider.sellerId || "") && normalize(s.sellerName) === normalize(provider.sellerName));
     const offer = seller?.commertialOffer as Record<string, unknown> | undefined;
     if (!offer) { skipped++; continue; }
     const current = numeric(offer.Price), list = numeric(offer.ListPrice), quantity = numeric(offer.AvailableQuantity);
@@ -121,12 +157,256 @@ async function search(provider: Provider, regionId: string, term: string) {
   }
   return { candidates, found: products.length, skipped };
 }
+
+const VIP_API_BASE = "https://services.vipcommerce.com.br/api-admin/v1";
+// Public client key served by the stores' own VipCommerce web applications.
+// A short-lived store JWT is requested at runtime for every sync.
+const VIP_LOJA_USER = "loja";
+const VIP_LOJA_KEY = "df072f85df9bf7dd71b6811c34bdbaa4f219d98775b56cff9dfa5f8ca1bf8469";
+
+type VipContext = {
+  orgId: number;
+  vipFilialId: number;
+  filialId: number;
+  cdId: number;
+  token: string;
+  filialName: string;
+  siteUrl: string;
+  productImageBase: string | null;
+  sessionId: string;
+};
+
+async function vipJson(url: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
+  const response = await fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(25000),
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "User-Agent": "ZORVI/1.0",
+      ...(init.headers || {}),
+    },
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok || payload.success === false) {
+    const message = String(payload.error || payload.message || "HTTP " + response.status);
+    throw new Error("VipCommerce respondeu " + response.status + ": " + message);
+  }
+  return payload;
+}
+
+async function vipContext(provider: Provider): Promise<VipContext> {
+  const domainUrl = VIP_API_BASE + "/organizacoes/filiais/dominio/" + provider.domain;
+  const domainPayload = await vipJson(domainUrl);
+  const domainData = domainPayload.data as Record<string, unknown> | undefined;
+  const organization = domainData?.organizacao as Record<string, unknown> | undefined;
+  const orgId = numeric(organization?.id);
+  const vipFilialId = numeric(domainData?.id);
+  if (!orgId || !vipFilialId) {
+    throw new Error("Não foi possível identificar a organização e a filial VipCommerce de " + provider.label);
+  }
+
+  const headers = {
+    "DomainKey": provider.domain,
+    "OrganizationId": String(orgId),
+  };
+  const loginPayload = await vipJson(VIP_API_BASE + "/org/" + orgId + "/auth/loja/login", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ domain: provider.domain, username: VIP_LOJA_USER, key: VIP_LOJA_KEY }),
+  });
+  const token = typeof loginPayload.data === "string" ? loginPayload.data : "";
+  if (token.length < 40) throw new Error("VipCommerce não retornou um token válido para " + provider.label);
+
+  const omniPayload = await vipJson(VIP_API_BASE + "/org/" + orgId + "/loja/omnichannel/" + vipFilialId, {
+    headers: { ...headers, "Authorization": "Bearer " + token },
+  });
+  const omniData = omniPayload.data as Record<string, unknown> | undefined;
+  const filial = omniData?.filial as Record<string, unknown> | undefined;
+  const filialId = numeric(filial?.id);
+  const cdId = numeric(filial?.centro_distribuicao_padrao_id);
+  if (!filialId || !cdId) throw new Error("A filial " + provider.label + " não informou um centro de distribuição padrão.");
+  if (filial?.em_manutencao === true || filial?.filial_sem_ecommerce === true) {
+    throw new Error("O catálogo online de " + provider.label + " está temporariamente indisponível.");
+  }
+
+  const fileLocations = Array.isArray(omniData?.localizacaoArquivos)
+    ? omniData!.localizacaoArquivos as Array<Record<string, unknown>>
+    : [];
+  const productBucket = fileLocations.find((entry) => entry.model === "Produto")?.localizacao;
+  const siteUrl = String(filial?.site_url || provider.base);
+  let productImageBase: string | null = null;
+  if (typeof productBucket === "string" && productBucket.startsWith("https://")) {
+    try {
+      const imageHost = new URL(productBucket).hostname;
+      if (imageHost.endsWith("magaluobjects.com")) productImageBase = productBucket.replace(/\/$/, "");
+    } catch { /* Keep product images optional when the CDN config is invalid. */ }
+  }
+
+  return {
+    orgId,
+    vipFilialId,
+    filialId,
+    cdId,
+    token,
+    filialName: String(filial?.nome || provider.label),
+    siteUrl,
+    productImageBase,
+    sessionId: crypto.randomUUID(),
+  };
+}
+
+function vipProductUrl(provider: Provider, siteUrl: string, product: Record<string, unknown>, name: string): string | null {
+  const productId = String(product.produto_id || "");
+  if (!productId) return null;
+  const suppliedSlug = String(product.link || "").trim().replace(/^\/+|\/+$/g, "");
+  const slug = suppliedSlug || normalize(name).replace(/\s+/g, "-");
+  return safeUrl(siteUrl.replace(/\/$/, "") + "/produto/" + productId + "/" + slug, provider);
+}
+
+function vipCandidate(provider: Provider, context: VipContext, row: Record<string, unknown>): Candidate | null {
+  if (row.disponivel !== true) return null;
+  const barcode = String(row.codigo_barras || "").replace(/\D/g, "");
+  if (!/^\d{8,14}$/.test(barcode)) return null;
+  const name = String(row.descricao || "").trim();
+  if (!name) return null;
+
+  const regularPrice = numeric(row.preco);
+  const offer = row.oferta && typeof row.oferta === "object"
+    ? row.oferta as Record<string, unknown>
+    : null;
+  const offerPrice = numeric(offer?.preco_oferta);
+  const minimumQuantity = numeric(offer?.quantidade_minima);
+  const payingQuantity = numeric(offer?.quantidade_pagar);
+  const offerQuantity = numeric(offer?.quantidade_oferta);
+  const unitOffer = row.em_oferta === true
+    && offerPrice !== null && offerPrice > 0
+    && (minimumQuantity === null || minimumQuantity <= 1)
+    && (payingQuantity === null || payingQuantity === 1)
+    && (offerQuantity === null || offerQuantity === 1);
+  const price = unitOffer ? offerPrice : regularPrice;
+  if (price === null || price <= 0) return null;
+
+  const sourceUrl = vipProductUrl(provider, context.siteUrl, row, name);
+  if (!sourceUrl) return null;
+
+  const image = String(row.imagem || "").trim();
+  const imageUrl = image && context.productImageBase
+    ? context.productImageBase + "/250x250/" + encodeURIComponent(image)
+    : null;
+  const brandValue = row.marca;
+  const brand = typeof brandValue === "string"
+    ? brandValue.trim() || null
+    : brandValue && typeof brandValue === "object"
+      ? String((brandValue as Record<string, unknown>).nome || "").trim() || null
+      : null;
+  const unit = unitFrom(name) || (typeof row.unidade_sigla === "string" ? row.unidade_sigla : null);
+  const sourceProductId = String(row.produto_id) + ":" + String(row.id || row.sku || barcode);
+  const discounted = unitOffer && regularPrice !== null && offerPrice !== null && offerPrice < regularPrice - 0.009;
+
+  return {
+    provider,
+    sourceProductId,
+    barcode,
+    name,
+    brand,
+    unit,
+    subcategory: null,
+    imageUrl,
+    sourceUrl,
+    price: Math.round(price * 100) / 100,
+    priceNote: discounted
+      ? "Preço promocional unitário publicado no catálogo oficial; descontos condicionados a quantidade não incluídos."
+      : "Preço publicado no catálogo online oficial da loja de Teresina.",
+  };
+}
+
+async function fetchVipCatalog(provider: Provider): Promise<CatalogResult> {
+  const context = await vipContext(provider);
+  const byBarcode = new Map<string, Candidate>();
+  let found = 0;
+  let skipped = 0;
+  const termResults: Array<Record<string, unknown>> = [];
+
+  for (const term of provider.terms) {
+    let termFound = 0;
+    let termEligible = 0;
+    let termSkipped = 0;
+    let pagesFetched = 0;
+
+    for (let page = 1; page <= 3; page++) {
+      const pathTerm = term.trim().replace(/[\\/\s%?=]/g, "+");
+      const endpoint = VIP_API_BASE + "/org/" + context.orgId
+        + "/filial/" + context.filialId
+        + "/centro_distribuicao/" + context.cdId
+        + "/loja/buscas/produtos/termo/" + pathTerm
+        + "?page=" + page + "&session=" + context.sessionId;
+      try {
+        const payload = await vipJson(endpoint, {
+          headers: {
+            "DomainKey": provider.domain,
+            "OrganizationId": String(context.orgId),
+            "Authorization": "Bearer " + context.token,
+          },
+        });
+        const data = payload.data as Record<string, unknown> | undefined;
+        const rows = Array.isArray(data?.produtos) ? data!.produtos as Array<Record<string, unknown>> : [];
+        pagesFetched++;
+        termFound += rows.length;
+        found += rows.length;
+        for (const row of rows) {
+          const candidate = vipCandidate(provider, context, row);
+          if (!candidate) {
+            termSkipped++;
+            skipped++;
+            continue;
+          }
+          termEligible++;
+          if (!byBarcode.has(candidate.barcode)) byBarcode.set(candidate.barcode, candidate);
+        }
+        if (rows.length < 20) break;
+      } catch (error) {
+        if (page === 1) throw error;
+        console.warn("[retail-catalog-sync] Página " + page + " de " + provider.id + " / " + term + " não foi carregada:", error instanceof Error ? error.message : String(error));
+        break;
+      }
+      await pause(100);
+    }
+
+    termResults.push({
+      term,
+      found: termFound,
+      eligible: termEligible,
+      skipped: termSkipped,
+      pagesFetched,
+    });
+    await pause(120);
+  }
+
+  return {
+    provider,
+    regionId: "VipCommerce org " + context.orgId + " · filial " + context.vipFilialId + " · CD " + context.cdId,
+    sellers: [context.filialName],
+    sellerCount: 1,
+    found,
+    skipped,
+    terms: termResults,
+    candidates: [...byBarcode.values()],
+  };
+}
+
+async function fetchCatalog(provider: Provider): Promise<CatalogResult> {
+  return provider.platform === "vipcommerce"
+    ? await fetchVipCatalog(provider)
+    : await fetchVtexCatalog(provider);
+}
+
 async function batches<T>(values: string[], load: (part: string[]) => Promise<T[]>) {
   const unique = [...new Set(values.filter(Boolean))]; const out: T[] = [];
   for (let i = 0; i < unique.length; i += 100) out.push(...await load(unique.slice(i, i + 100)));
   return out;
 }
-async function fetchCatalog(provider: Provider) {
+async function fetchVtexCatalog(provider: Provider): Promise<CatalogResult> {
   const region = await regionFor(provider);
   const byBarcode = new Map<string, Candidate>();
   let found = 0, skipped = 0;
@@ -170,7 +450,7 @@ async function persistCatalog(catalog: Awaited<ReturnType<typeof fetchCatalog>>,
     brand: c.brand, variant: null, barcode: c.barcode, category: provider.category, unit: c.unit,
     subcategory: c.subcategory, source_provider: provider.id, source_product_id: c.sourceProductId,
     source_url: c.sourceUrl, image_url: c.imageUrl,
-    description: "Produto do catálogo oficial " + provider.label + ". Oferta online regionalizada para Teresina/PI; não confirma estoque em filial física.",
+    description: "Produto do catálogo oficial " + provider.label + ". Oferta online da operação de Teresina/PI; não confirma estoque em filial física.",
     country_code: "BR", source_updated_at: new Date().toISOString(), is_active: true,
   }));
 
@@ -217,9 +497,11 @@ async function persistCatalog(catalog: Awaited<ReturnType<typeof fetchCatalog>>,
     if (error) throw new Error("Falha ao salvar nomes alternativos do " + provider.label + ": " + error.message);
   }
 
-  const regionLabel = provider.id === "atacadao" && catalog.sellers.length
-    ? "Região atendida: " + catalog.sellers.join(", ") + "."
-    : "Região consultada pelo CEP " + provider.postalCode + ".";
+  const regionLabel = provider.platform === "vipcommerce"
+    ? "Catálogo oficial da operação online de Teresina."
+    : provider.id === "atacadao" && catalog.sellers.length
+      ? "Região atendida: " + catalog.sellers.join(", ") + "."
+      : "Região consultada pelo CEP " + provider.postalCode + ".";
   const now = new Date().toISOString();
   const priceRows: Array<Record<string, unknown>> = [];
   for (const c of catalog.candidates) {
@@ -267,7 +549,7 @@ Deno.serve(async (request: Request) => {
   const body = await request.json().catch(() => ({}));
   const source = String(body?.source || "all");
   const action = String(body?.action || "sync");
-  if (!["all", "atacadao", "pague_menos"].includes(source)) return json({ error: "Fonte inválida." }, 400);
+  if (!["all", "atacadao", "pague_menos", "carvalho_super", "ferreira_super"].includes(source)) return json({ error: "Fonte inválida." }, 400);
   if (!["sync", "preview"].includes(action)) return json({ error: "Ação inválida." }, 400);
   const selected = providers.filter((p) => source === "all" || p.id === source);
   const startedAt = new Date().toISOString();
