@@ -330,7 +330,7 @@ async function discoverOpenFoodFactsProducts(
     url.searchParams.set("fields", "code,product_name,brands,quantity,categories_tags,countries_tags,image_front_url,last_modified_t");
     url.searchParams.set("tagtype_0", "countries");
     url.searchParams.set("tag_contains_0", "contains");
-    url.searchParams.set("tag_0", "brazil");
+    url.searchParams.set("tag_0", "en:brazil");
 
     const response = await fetch(url, {
       headers: {
