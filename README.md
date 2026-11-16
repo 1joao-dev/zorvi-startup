@@ -52,6 +52,35 @@ A primeira integração está preparada para Supabase Auth e perfis.
 
 Nunca coloque a `service_role` key no frontend. Use somente a chave pública anon/publishable; a proteção dos dados é feita por RLS no banco.
 
+
+## Catálogo central de produtos
+
+O catálogo de produtos é separado dos preços por estabelecimento: cadastrar um produto não significa que uma loja o venda, tenha estoque ou pratique determinado preço.
+
+- **Catálogo de referência ZORVI:** inclui produtos comuns de mercearia, hortifruti, limpeza, higiene e cuidados pessoais para melhorar o reconhecimento de buscas.
+- **Open Food Facts:** a ZORVI AI pode procurar alimentos que ainda não estejam no catálogo e importar metadados públicos associados a produtos do Brasil. A fonte não fornece preço local nem estoque. A base é colaborativa e licenciada sob ODbL; consulte a atribuição e os termos antes de redistribuir os dados.
+- **ANVISA:** o importador local permite carregar a base oficial de medicamentos registrados. O registro regulatório não é uma cotação nem confirma comercialização em uma farmácia.
+
+### Sincronizar as bases públicas
+
+Os dois comandos precisam de acesso administrativo ao Supabase. Use as variáveis somente no terminal local; **nunca** coloque a chave service role no navegador, em código frontend ou no GitHub.
+
+PowerShell:
+
+```powershell
+$env:SUPABASE_URL="https://SEU-PROJETO.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="SUA_CHAVE_SERVICE_ROLE"
+npm run catalog:sync:open-food-facts
+npm run catalog:sync:anvisa
+```
+
+O sincronizador do Open Food Facts consulta termos comuns do Brasil e respeita uma pausa entre requisições para observar o limite público da API. O importador da ANVISA baixa o arquivo oficial atualizado mensalmente e importa os registros em lotes.
+
+Fontes:
+- Open Food Facts API: https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/
+- ANVISA — dados abertos: https://dados.anvisa.gov.br/dados/
+- ANVISA — dicionário de dados de medicamentos: https://dados.anvisa.gov.br/dados/Documentacao_e_Dicionario_de_Dados_MEDICAMENTOS.pdf
+
 ## Próximas integrações
 
 1. Persistência de publicações, curtidas e comentários no Supabase.
