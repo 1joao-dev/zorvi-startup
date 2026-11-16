@@ -65,7 +65,7 @@ O catálogo de produtos é separado dos preços por estabelecimento: cadastrar u
 
 Os dois comandos precisam de acesso administrativo ao Supabase. Use as variáveis somente no terminal local; **nunca** coloque a chave service role no navegador, em código frontend ou no GitHub.
 
-PowerShell:
+Depois de clonar o repositório e instalar as dependências com `npm install`, execute no PowerShell:
 
 ```powershell
 $env:SUPABASE_URL="https://SEU-PROJETO.supabase.co"
