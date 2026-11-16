@@ -53,11 +53,11 @@ async function isAuthorised(request: Request): Promise<boolean> {
   return data === true;
 }
 
-async function probe(provider: Provider) {
+async function probe(provider: Provider, term: string) {
   const url = new URL(provider.searchUrl);
-  url.searchParams.set("ft", "arroz");
+  url.searchParams.set("ft", term);
   url.searchParams.set("_from", "0");
-  url.searchParams.set("_to", "4");
+  url.searchParams.set("_to", "19");
 
   const startedAt = Date.now();
   try {
@@ -74,14 +74,38 @@ async function probe(provider: Provider) {
     try { payload = JSON.parse(body); } catch { /* non-JSON response */ }
 
     const products = Array.isArray(payload) ? payload : [];
+    const samples = products.slice(0, 8).map((raw) => {
+      const product = raw as Record<string, unknown>;
+      const items = Array.isArray(product.items) ? product.items as Array<Record<string, unknown>> : [];
+      const item = items[0] || null;
+      const sellers = Array.isArray(item?.sellers) ? item.sellers as Array<Record<string, unknown>> : [];
+      const sellerRows = sellers.slice(0, 4).map((seller) => {
+        const offer = seller.commertialOffer && typeof seller.commertialOffer === "object"
+          ? seller.commertialOffer as Record<string, unknown>
+          : null;
+        return {
+          sellerId: seller.sellerId ?? null,
+          sellerName: seller.sellerName ?? null,
+          sellerDefault: seller.sellerDefault ?? null,
+          price: offer?.Price ?? null,
+          listPrice: offer?.ListPrice ?? null,
+          availableQuantity: offer?.AvailableQuantity ?? null,
+        };
+      });
+      return {
+        productId: product.productId ?? null,
+        productName: product.productName ?? null,
+        brand: product.brand ?? null,
+        link: product.link ?? null,
+        itemId: item?.itemId ?? null,
+        ean: item?.ean ?? null,
+        itemName: item?.name ?? null,
+        sellers: sellerRows,
+        categories: product.categories ?? null,
+      };
+    });
     const first = products[0] && typeof products[0] === "object"
       ? products[0] as Record<string, unknown>
-      : null;
-    const items = Array.isArray(first?.items) ? first.items as Array<Record<string, unknown>> : [];
-    const firstItem = items[0] || null;
-    const sellers = Array.isArray(firstItem?.sellers) ? firstItem.sellers as Array<Record<string, unknown>> : [];
-    const offer = sellers[0]?.commertialOffer && typeof sellers[0].commertialOffer === "object"
-      ? sellers[0].commertialOffer as Record<string, unknown>
       : null;
 
     return {
@@ -91,24 +115,9 @@ async function probe(provider: Provider) {
       ok: response.ok,
       contentType,
       elapsedMs: Date.now() - startedAt,
+      term,
       productCount: products.length,
-      sample: first ? {
-        productId: first.productId ?? null,
-        productName: first.productName ?? null,
-        brand: first.brand ?? null,
-        link: first.link ?? null,
-        itemId: firstItem?.itemId ?? null,
-        ean: firstItem?.ean ?? null,
-        itemName: firstItem?.name ?? null,
-        price: offer?.Price ?? null,
-        listPrice: offer?.ListPrice ?? null,
-        availableQuantity: offer?.AvailableQuantity ?? null,
-        sellerId: sellers[0]?.sellerId ?? null,
-        sellerName: sellers[0]?.sellerName ?? null,
-        sellerDefault: sellers[0]?.sellerDefault ?? null,
-        itemReferenceId: firstItem?.referenceId ?? null,
-        productCategories: first.categories ?? null,
-      } : null,
+      samples,
       responsePreview: products.length === 0 ? body.slice(0, 300) : undefined,
     };
   } catch (error) {
@@ -180,7 +189,14 @@ Deno.serve(async (request: Request) => {
     : PROVIDERS.filter((provider) => provider.id === requested);
   if (!providers.length) return json({ error: "Invalid source. Use probe, all, atacadao or pague_menos." }, 400);
 
-  const results = await Promise.all(providers.map(probe));
+  const terms = body?.term && typeof body.term === "string"
+    ? [body.term.trim().slice(0, 80)]
+    : requested === "pague_menos" ? ["paracetamol", "dipirona"] : ["arroz", "leite"];
+  const results = await Promise.all(providers.map(async (provider) => {
+    const termResults = [];
+    for (const term of terms) termResults.push(await probe(provider, term));
+    return { provider: provider.id, terms: termResults };
+  }));
   const atacadaoStorePages = providers.some((provider) => provider.id === "atacadao")
     ? await probeAtacadaoStorePages()
     : [];
