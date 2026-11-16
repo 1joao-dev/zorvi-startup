@@ -204,14 +204,16 @@ function searchTokens(value: string): string[] {
     .replace(/(\d)([a-z])/g, "$1 $2")
     .replace(/([a-z])(\d)/g, "$1 $2")
     .split(/\s+/)
-    .filter((token) => (token.length >= 2 || token === "g" || token === "c") && !stopWords.has(token));
+    .filter((token) => (token.length >= 2 || ["g", "c", "m", "p"].includes(token)) && !stopWords.has(token));
 }
 
 const productFollowUpTerms = new Set([
   "generico", "generica", "marca", "apresentacao", "embalagem", "comprimido",
   "comprimidos", "revestido", "revestidos", "pacote", "tubo", "frasco",
-  "tamanho", "fps", "mg", "ml", "g", "unidade", "unidades",
+  "tamanho", "fps", "mg", "ml", "g", "m", "p", "gg", "xg", "xgg", "unidade", "unidades",
 ]);
+
+const presentationSizeTokens = new Set(["pp", "p", "m", "g", "gg", "xg", "xgg", "xggg"]);
 
 function isFollowUpQuestion(value: string): boolean {
   const question = normalize(value);
@@ -245,21 +247,28 @@ function findMatchingProducts(
   const ranked = products
     .map((product) => {
       const productAliases = aliasesByProduct.get(product.id) || [];
-      const searchableTokens = new Set(searchTokens([
+      const productTokens = searchTokens([
         product.name, product.normalized_name, product.brand || "",
         product.variant || "", product.unit || "", ...productAliases,
-      ].join(" ")));
+      ].join(" "));
+      const searchableTokens = new Set(productTokens);
       const brandTokens = new Set(searchTokens(product.brand || ""));
       const matchedTokens = tokens.filter((token) => searchableTokens.has(token));
       const brandMatches = tokens.filter((token) => brandTokens.has(token));
       const coverage = matchedTokens.length / tokens.length;
+      const queryNumbers = tokens.filter((token) => /^\\d{2,}$/.test(token));
+      const productNumbers = productTokens.filter((token) => /^\\d{2,}$/.test(token));
+      const querySizes = tokens.filter((token) => presentationSizeTokens.has(token));
+      const productSizes = productTokens.filter((token) => presentationSizeTokens.has(token));
+      const conflictingNumber = queryNumbers.some((token) => productNumbers.length > 0 && !productNumbers.includes(token));
+      const conflictingSize = querySizes.some((token) => productSizes.length > 0 && !productSizes.includes(token));
       const normalizedQuestion = normalize(question);
       const exactNameBonus = normalizedQuestion.includes(normalize(product.name)) ? 2 : 0;
       const exactAliasBonus = productAliases.some((alias) => normalize(alias) === normalizedQuestion) ? 2.5 : 0;
       const score = matchedTokens.length + brandMatches.length * 1.5 + exactNameBonus + exactAliasBonus;
-      return { product, score, coverage, matchedCount: matchedTokens.length };
+      return { product, score, coverage, matchedCount: matchedTokens.length, presentationConflict: conflictingNumber || conflictingSize };
     })
-    .filter((item) => item.matchedCount > 0 && item.coverage >= 0.34)
+    .filter((item) => item.matchedCount > 0 && item.coverage >= 0.34 && !item.presentationConflict)
     .sort((a, b) => b.score - a.score || b.coverage - a.coverage || a.product.name.localeCompare(b.product.name, "pt-BR"));
 
   if (!ranked.length) return { candidates: [], selected: null, ambiguous: false };
