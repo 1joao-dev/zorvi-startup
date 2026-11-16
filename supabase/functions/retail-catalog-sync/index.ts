@@ -43,7 +43,7 @@ const PROVIDERS: Provider[] = [
 
 async function isAuthorised(request: Request): Promise<boolean> {
   const header = request.headers.get("authorization") || "";
-  const token = header.replace(/^Bearer\\s+/i, "").trim();
+  const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token || token.length < 32) return false;
   const { data, error } = await admin.rpc("verify_catalog_import_token", { candidate: token });
   if (error) {
