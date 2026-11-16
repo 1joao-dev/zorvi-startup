@@ -949,13 +949,14 @@ mapPrice: result ? Number(result.price) : null,
     setSearchPerformed(true);
     try {
       const { data: products, error } = await supabase
-        .from("products")
-        .select("id,name,brand,variant,unit,category")
-        .ilike("normalized_name", "%" + query.trim() + "%")
-        .limit(20);
+        .rpc("search_product_catalog", {
+          search_query: query.trim(),
+          result_limit: 1,
+        });
       if (error) throw error;
 
-      const productIds = (products || []).map((product) => product.id);
+      // Keep one exact presentation per comparison; never mix different sizes or brands in one price ranking.
+      const productIds = products?.[0]?.id ? [products[0].id] : [];
       setSearchProductCategory(products?.[0]?.category || null);
       if (products?.[0]?.category) setFilter(products[0].category);
       if (!productIds.length) {

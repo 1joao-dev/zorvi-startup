@@ -25,3 +25,6 @@ jobs:
         run: bun run test -- --passWithNoTests
       - name: Production build
         run: bun run build
+
+      - name: Validate catalog import scripts
+        run: node --check scripts/sync-open-food-facts.mjs && node --check scripts/sync-anvisa-medicines.mjs

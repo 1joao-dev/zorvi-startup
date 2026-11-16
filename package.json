@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "catalog:sync:open-food-facts": "node scripts/sync-open-food-facts.mjs",
+    "catalog:sync:anvisa": "node scripts/sync-anvisa-medicines.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
