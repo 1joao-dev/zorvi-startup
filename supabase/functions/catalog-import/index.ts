@@ -618,6 +618,7 @@ async function importOpenPrices() {
     url.searchParams.set("size", "100");
     url.searchParams.set("page", "1");
     url.searchParams.set("type", "PRODUCT");
+    url.searchParams.set("kind", "COMMUNITY");
     url.searchParams.set("location__type", "OSM");
 
     let payload: {
@@ -701,10 +702,10 @@ async function importOpenPrices() {
         currency: "BRL",
         price_type: "community_report",
         source_url: "https://prices.openfoodfacts.org/prices/" + item.id,
-        source_label: "Open Prices · " + (proofType === "PRICE_TAG" ? "foto da etiqueta" : "recibo") + " · " + item.date + " · contribuição comunitária com evidência",
+        source_label: "Open Prices · " + (proofType === "PRICE_TAG" ? "foto da etiqueta" : "recibo") + " · " + item.date + " · evidência anexada · aguardando revisão ZORVI",
         observed_at: new Date(item.date + "T12:00:00.000Z").toISOString(),
         availability_status: "unknown",
-        verification_status: "verified",
+        verification_status: "pending",
         confidence_score: proofType === "PRICE_TAG" ? 0.92 : 0.88,
         submitted_by: null,
       });
@@ -741,7 +742,7 @@ async function importOpenPrices() {
     unmatchedProducts,
     skippedWithoutEvidence,
     regions: regionResults,
-    note: "Only recent Brazil-real prices with photo evidence and a strict store name/location match are imported. Availability remains unknown.",
+    note: "Only recent BRL community prices with photo evidence and a strict store name/location match are imported as pending. A ZORVI reviewer must approve them before they appear in comparisons; availability remains unknown.",
   };
 }
 
