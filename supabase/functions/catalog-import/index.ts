@@ -314,7 +314,7 @@ async function flushAnvisaBatch(batch: Array<Record<string, unknown>>) {
   return { products: data?.length || 0, aliases };
 }
 
-async function importAnvisa() {
+async function importAnvisa(rowOffset = 0, rowLimit = 5000) {
   const response = await fetch(ANVISA_URL, {
     headers: { "User-Agent": "ZORVI catalog importer/1.0", "Accept": "text/csv,*/*" },
     signal: AbortSignal.timeout(90000),
@@ -348,12 +348,17 @@ async function importAnvisa() {
     throw new Error("Could not identify the ANVISA product-name column. Headers: " + headers.slice(0, 40).join(" | "));
   }
 
+  const safeOffset = Math.max(0, Math.floor(Number(rowOffset) || 0));
+  const safeLimit = Math.min(8000, Math.max(100, Math.floor(Number(rowLimit) || 5000)));
   const today = new Date();
   const now = new Date().toISOString();
   let batch: Array<Record<string, unknown>> = [];
   let productsImported = 0;
   let aliasesImported = 0;
   let rowsProcessed = 0;
+  let rowsScanned = 0;
+  let rowIndex = 0;
+  let hasMore = false;
 
   const flush = async () => {
     if (!batch.length) return;
@@ -363,7 +368,20 @@ async function importAnvisa() {
     batch = [];
   };
 
-  for (const columns of iterator) {
+  while (true) {
+    const next = iterator.next();
+    if (next.done) break;
+    const columns = next.value;
+    if (rowIndex < safeOffset) {
+      rowIndex += 1;
+      continue;
+    }
+    if (rowIndex >= safeOffset + safeLimit) {
+      hasMore = true;
+      break;
+    }
+    rowIndex += 1;
+    rowsScanned += 1;
     const get = (index: number) => index >= 0 ? String(columns[index] || "").trim() : "";
     const name = get(nameIndex).slice(0, 180);
     if (!name) continue;
@@ -409,7 +427,17 @@ async function importAnvisa() {
   }
 
   await flush();
-  return { rowsProcessed, productsImported, aliasesImported, fileBytes: bytes.length };
+  return {
+    rowOffset: safeOffset,
+    rowLimit: safeLimit,
+    rowsScanned,
+    rowsProcessed,
+    productsImported,
+    aliasesImported,
+    hasMore,
+    nextOffset: hasMore ? safeOffset + rowsScanned : null,
+    fileBytes: bytes.length,
+  };
 }
 
 Deno.serve(async (request: Request) => {
@@ -442,7 +470,7 @@ Deno.serve(async (request: Request) => {
       results.open_food_facts = await importOpenFoodFacts();
     }
     if (source === "all" || source === "anvisa") {
-      results.anvisa = await importAnvisa();
+      results.anvisa = await importAnvisa(body?.row_offset, body?.row_limit);
     }
 
     return Response.json({
