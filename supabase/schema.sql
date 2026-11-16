@@ -211,14 +211,26 @@ alter table public.product_catalog_search_cache enable row level security;
 grant select, insert, update, delete on public.product_catalog_search_cache to service_role;
 
 create or replace function public.normalize_product_text(input text)
-returns text language sql immutable parallel safe as $$
+returns text
+language sql
+immutable
+parallel safe
+set search_path = pg_catalog, public
+as $$
   select trim(regexp_replace(
-    translate(lower(coalesce(input, '')),
-      'áàâãäéèêëíìîïóòôõöúùûüçñ',
-      'aaaaaeeeeiiiiooooouuuucn'),
-    '[^a-z0-9]+', ' ', 'g'
+    regexp_replace(
+      regexp_replace(
+        translate(lower(coalesce(input, '')),
+          'áàâãäéèêëíìîïóòôõöúùûüçñ',
+          'aaaaaeeeeiiiiooooouuuucn'),
+        '([0-9])([a-z])', '\1 \2', 'g'
+      ),
+      '([a-z])([0-9])', '\1 \2', 'g'
+    ),
+    '\s+', ' ', 'g'
   ));
 $$;
+
 revoke all on function public.normalize_product_text(text) from public;
 grant execute on function public.normalize_product_text(text) to authenticated, service_role;
 
