@@ -20,7 +20,37 @@ const OFF_SEARCHES = [
   "biscoito",
   "refrigerante",
   "oleo de soja",
+  "acucar",
+  "ovos",
+  "frango",
+  "banana",
+  "iogurte",
+  "queijo",
+  "agua mineral",
+  "pao de forma",
 ];
+
+const OBF_SEARCHES = [
+  "shampoo",
+  "condicionador",
+  "desodorante",
+  "sabonete",
+  "protetor solar",
+  "creme dental",
+  "hidratante",
+  "absorvente",
+];
+
+const OPF_SEARCHES = [
+  "fralda",
+  "papel higienico",
+  "detergente",
+  "agua sanitaria",
+  "sabao em po",
+  "amaciante",
+];
+
+const OPEN_FACTS_FIELDS = "code,product_name,brands,quantity,categories_tags,countries_tags,image_front_url,last_modified_t";
 
 const OFF_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 const ANVISA_URL = "https://dados.anvisa.gov.br/dados/DADOS_ABERTOS_MEDICAMENTOS.csv";
@@ -55,7 +85,7 @@ async function isAuthorised(request: Request): Promise<boolean> {
 }
 
 async function saveAliases(
-  products: Array<{ id: string; name: string; brand?: string | null; variant?: string | null }>,
+  products: Array<{ id: string; name: string; brand?: string | null; variant?: string | null; aliases?: string[] }>,
   provider: string,
   includeBrand = true,
 ): Promise<number> {
@@ -72,6 +102,7 @@ async function saveAliases(
       ...(includeBrand ? [product.brand] : []),
       product.variant,
       ...(includeBrand ? [[product.brand, product.name].filter(Boolean).join(" ")] : []),
+      ...(product.aliases || []),
     ];
     for (const candidate of candidates) {
       if (!candidate) continue;
@@ -128,23 +159,43 @@ async function fetchOpenFoodFactsSearch(url: URL, term: string) {
   throw new Error("Open Food Facts returned HTTP " + lastStatus + " for " + term + " after retries");
 }
 
-async function importOpenFoodFacts() {
+type OpenFactsProduct = {
+  code?: string;
+  product_name?: string;
+  brands?: string;
+  quantity?: string;
+  categories_tags?: string[];
+  countries_tags?: string[];
+  image_front_url?: string;
+  last_modified_t?: number;
+};
+
+async function importOpenFactsProvider(config: {
+  provider: string;
+  baseUrl: string;
+  category: string;
+  fallbackSubcategory: string;
+  searches: string[];
+  termOffset?: number;
+  termLimit?: number;
+  label: string;
+}) {
   let imported = 0;
   let aliasCount = 0;
   const termResults: Array<{ term: string; found: number; imported: number; warning?: string }> = [];
+  const start = Math.max(0, Math.floor(Number(config.termOffset) || 0));
+  const limit = Math.min(8, Math.max(1, Math.floor(Number(config.termLimit) || 8)));
+  const end = Math.min(config.searches.length, start + limit);
 
-  for (let index = 0; index < OFF_SEARCHES.length; index += 1) {
-    const term = OFF_SEARCHES[index];
-    const url = new URL(OFF_URL);
+  for (let index = start; index < end; index += 1) {
+    const term = config.searches[index];
+    const url = new URL(config.baseUrl + "/cgi/search.pl");
     url.searchParams.set("search_terms", term);
     url.searchParams.set("search_simple", "1");
     url.searchParams.set("action", "process");
     url.searchParams.set("json", "1");
     url.searchParams.set("page_size", "80");
-    url.searchParams.set(
-      "fields",
-      "code,product_name,brands,quantity,categories_tags,countries_tags,image_front_url,last_modified_t",
-    );
+    url.searchParams.set("fields", OPEN_FACTS_FIELDS);
     url.searchParams.set("tagtype_0", "countries");
     url.searchParams.set("tag_contains_0", "contains");
     url.searchParams.set("tag_0", "en:brazil");
@@ -154,9 +205,9 @@ async function importOpenFoodFacts() {
       payload = await fetchOpenFoodFactsSearch(url, term);
     } catch (error) {
       const warning = error instanceof Error ? error.message : String(error);
-      console.warn("[catalog-import] Skipping Open Food Facts term:", term, warning);
+      console.warn("[catalog-import] Skipping " + config.provider + " term:", term, warning);
       termResults.push({ term, found: 0, imported: 0, warning });
-      if (index < OFF_SEARCHES.length - 1) await sleep(8500);
+      if (index < end - 1) await sleep(8500);
       continue;
     }
 
@@ -170,7 +221,7 @@ async function importOpenFoodFacts() {
 
     if (!externalProducts.length) {
       termResults.push({ term, found: 0, imported: 0 });
-      if (index < OFF_SEARCHES.length - 1) await sleep(8500);
+      if (index < end - 1) await sleep(8500);
       continue;
     }
 
@@ -183,7 +234,7 @@ async function importOpenFoodFacts() {
 
     const protectedBarcodes = new Set(
       (existing || [])
-        .filter((item) => item.source_provider !== "open_food_facts")
+        .filter((item) => item.source_provider !== config.provider)
         .map((item) => item.barcode),
     );
 
@@ -194,20 +245,31 @@ async function importOpenFoodFacts() {
         const brand = clean(item.brands, 120);
         const quantity = clean(item.quantity, 80);
         const code = item.code as string;
+        const categoryTags = (item.categories_tags || [])
+          .map((tag) => tag.replace(/^[a-z]{2}:/, "").slice(0, 100));
+        let category = config.category;
+        if (config.provider === "open_products_facts") {
+          const taxonomy = normalize(categoryTags.join(" "));
+          if (/(cosmetic|beauty|personal care|hygiene|shampoo|deodorant|toothpaste|skin care)/.test(taxonomy)) {
+            category = "Farmácia";
+          } else if (/(cleaning|household|paper|detergent|laundry|dishwashing)/.test(taxonomy)) {
+            category = "Mercado";
+          }
+        }
         return {
           name,
-          normalized_name: normalize([name, brand, quantity].filter(Boolean).join(" ")),
+          normalized_name: normalize([name, brand || "", quantity || ""].join(" ")),
           brand,
           variant: quantity,
           unit: quantity,
           barcode: code,
-          category: "Mercado",
-          subcategory: item.categories_tags?.[0]?.replace(/^[a-z]{2}:/, "").slice(0, 100) || "Alimentos",
-          source_provider: "open_food_facts",
+          category,
+          subcategory: categoryTags[0] || config.fallbackSubcategory,
+          source_provider: config.provider,
           source_product_id: code,
-          source_url: "https://world.openfoodfacts.org/product/" + encodeURIComponent(code),
+          source_url: config.baseUrl + "/product/" + encodeURIComponent(code),
           image_url: item.image_front_url?.startsWith("https://") ? item.image_front_url : null,
-          description: "Metadados públicos do Open Food Facts. Não confirmam preço, disponibilidade ou estoque em lojas.",
+          description: "Metadados públicos " + config.label + ". Não confirmam preço, disponibilidade ou estoque em lojas.",
           country_code: "BR",
           source_updated_at: item.last_modified_t ? new Date(item.last_modified_t * 1000).toISOString() : null,
           is_active: true,
@@ -220,21 +282,476 @@ async function importOpenFoodFacts() {
       const { data, error } = await admin.from("products")
         .upsert(rows, { onConflict: "source_provider,source_product_id" })
         .select("id,name,brand,variant");
-      if (error) throw new Error("Open Food Facts product upsert failed: " + error.message);
+      if (error) throw new Error(config.label + " product upsert failed: " + error.message);
       saved = data || [];
       imported += saved.length;
-      aliasCount += await saveAliases(saved, "open_food_facts");
+      aliasCount += await saveAliases(saved, config.provider);
     }
 
     termResults.push({ term, found: externalProducts.length, imported: saved.length });
-    if (index < OFF_SEARCHES.length - 1) await sleep(8500);
+    if (index < end - 1) await sleep(8500);
   }
 
   return {
+    provider: config.provider,
+    termOffset: start,
+    termLimit: limit,
+    nextOffset: end < config.searches.length ? end : null,
     imported,
     aliases: aliasCount,
     searches: termResults,
     failedSearches: termResults.filter((item) => Boolean(item.warning)).length,
+  };
+}
+
+async function importOpenFoodFacts(termOffset = 0, termLimit = 8) {
+  return importOpenFactsProvider({
+    provider: "open_food_facts",
+    baseUrl: "https://world.openfoodfacts.org",
+    category: "Mercado",
+    fallbackSubcategory: "Alimentos",
+    searches: OFF_SEARCHES,
+    termOffset,
+    termLimit,
+    label: "Open Food Facts",
+  });
+}
+
+async function importOpenBeautyFacts(termOffset = 0, termLimit = 8) {
+  return importOpenFactsProvider({
+    provider: "open_beauty_facts",
+    baseUrl: "https://world.openbeautyfacts.org",
+    category: "Farmácia",
+    fallbackSubcategory: "Higiene e beleza",
+    searches: OBF_SEARCHES,
+    termOffset,
+    termLimit,
+    label: "Open Beauty Facts",
+  });
+}
+
+async function importOpenProductsFacts(termOffset = 0, termLimit = 6) {
+  return importOpenFactsProvider({
+    provider: "open_products_facts",
+    baseUrl: "https://world.openproductsfacts.org",
+    category: "Lojas",
+    fallbackSubcategory: "Produtos diversos",
+    searches: OPF_SEARCHES,
+    termOffset,
+    termLimit,
+    label: "Open Products Facts",
+  });
+}
+
+const CURATED_PRODUCTS = [
+  {
+    source_product_id: "pharmacy-diaper-size-p",
+    name: "Fralda descartável tamanho P pacote",
+    category: "Farmácia",
+    subcategory: "Higiene e bebê",
+    variant: "Pacote tamanho P",
+    unit: "Pacote",
+    aliases: ["fralda p", "fralda tamanho p", "fralda descartável p", "fralda descartavel p"],
+  },
+  {
+    source_product_id: "pharmacy-diaper-size-g",
+    name: "Fralda descartável tamanho G pacote",
+    category: "Farmácia",
+    subcategory: "Higiene e bebê",
+    variant: "Pacote tamanho G",
+    unit: "Pacote",
+    aliases: ["fralda g", "fralda tamanho g", "fralda descartável g", "fralda descartavel g"],
+  },
+  {
+    source_product_id: "pharmacy-diaper-size-xg",
+    name: "Fralda descartável tamanho XG pacote",
+    category: "Farmácia",
+    subcategory: "Higiene e bebê",
+    variant: "Pacote tamanho XG",
+    unit: "Pacote",
+    aliases: ["fralda xg", "fralda tamanho xg", "fralda extra grande", "fralda descartável xg"],
+  },
+  {
+    source_product_id: "pharmacy-diaper-size-xxg",
+    name: "Fralda descartável tamanho XXG pacote",
+    category: "Farmácia",
+    subcategory: "Higiene e bebê",
+    variant: "Pacote tamanho XXG",
+    unit: "Pacote",
+    aliases: ["fralda xxg", "fralda tamanho xxg", "fralda extra extra grande"],
+  },
+  {
+    source_product_id: "pharmacy-toothpaste-90g",
+    name: "Creme dental 90 g",
+    category: "Farmácia",
+    subcategory: "Higiene bucal",
+    variant: "Tubo de 90 g",
+    unit: "90 g",
+    aliases: ["pasta de dente", "creme dental", "pasta dental 90g", "pasta de dente 90g"],
+  },
+  {
+    source_product_id: "pharmacy-dental-floss-50m",
+    name: "Fio dental 50 m",
+    category: "Farmácia",
+    subcategory: "Higiene bucal",
+    variant: "Embalagem de 50 metros",
+    unit: "50 m",
+    aliases: ["fio dental", "fio dental 50 metros"],
+  },
+  {
+    source_product_id: "pharmacy-baby-shampoo-200ml",
+    name: "Shampoo infantil 200 ml",
+    category: "Farmácia",
+    subcategory: "Higiene e bebê",
+    variant: "Frasco de 200 ml",
+    unit: "200 ml",
+    aliases: ["shampoo de bebê", "shampoo infantil", "xampu infantil"],
+  },
+  {
+    source_product_id: "pharmacy-liquid-soap-250ml",
+    name: "Sabonete líquido 250 ml",
+    category: "Farmácia",
+    subcategory: "Higiene pessoal",
+    variant: "Frasco de 250 ml",
+    unit: "250 ml",
+    aliases: ["sabonete liquido", "sabonete líquido 250 ml"],
+  },
+  {
+    source_product_id: "market-beans-fradinho-1kg",
+    name: "Feijão fradinho 1 kg",
+    category: "Mercado",
+    subcategory: "Mercearia",
+    variant: "Pacote de 1 kg",
+    unit: "1 kg",
+    aliases: ["feijao fradinho", "feijão fradinho", "feijao de corda", "feijão de corda"],
+  },
+  {
+    source_product_id: "market-rice-parboiled-1kg",
+    name: "Arroz parboilizado 1 kg",
+    category: "Mercado",
+    subcategory: "Mercearia",
+    variant: "Pacote de 1 kg",
+    unit: "1 kg",
+    aliases: ["arroz parboilizado", "arroz parbolizado 1kg"],
+  },
+  {
+    source_product_id: "market-milk-lactose-free-1l",
+    name: "Leite zero lactose 1 L",
+    category: "Mercado",
+    subcategory: "Laticínios",
+    variant: "Caixa de 1 litro",
+    unit: "1 L",
+    aliases: ["leite sem lactose", "leite zero lactose", "leite lacfree"],
+  },
+  {
+    source_product_id: "market-olive-oil-500ml",
+    name: "Azeite de oliva 500 ml",
+    category: "Mercado",
+    subcategory: "Mercearia",
+    variant: "Garrafa de 500 ml",
+    unit: "500 ml",
+    aliases: ["azeite", "azeite de oliva", "azeite extra virgem"],
+  },
+  {
+    source_product_id: "market-bread-french-kg",
+    name: "Pão francês por kg",
+    category: "Mercado",
+    subcategory: "Padaria",
+    variant: "Preço por quilograma",
+    unit: "kg",
+    aliases: ["pao frances", "pão francês", "pao de sal", "pão de sal"],
+  },
+  {
+    source_product_id: "market-macaxeira-kg",
+    name: "Macaxeira por kg",
+    category: "Mercado",
+    subcategory: "Hortifruti",
+    variant: "Preço por quilograma",
+    unit: "kg",
+    aliases: ["macaxeira", "mandioca", "aipim"],
+  },
+  {
+    source_product_id: "market-corn-oil-900ml",
+    name: "Óleo de milho 900 ml",
+    category: "Mercado",
+    subcategory: "Mercearia",
+    variant: "Garrafa de 900 ml",
+    unit: "900 ml",
+    aliases: ["oleo de milho", "óleo de milho"],
+  },
+  {
+    source_product_id: "market-mayonnaise-500g",
+    name: "Maionese 500 g",
+    category: "Mercado",
+    subcategory: "Mercearia",
+    variant: "Pote de 500 g",
+    unit: "500 g",
+    aliases: ["maionese", "maionese 500g"],
+  },
+];
+
+async function importZorviCurated() {
+  const now = new Date().toISOString();
+  const rows = CURATED_PRODUCTS.map((item) => ({
+    name: item.name,
+    normalized_name: normalize([item.name, item.variant].filter(Boolean).join(" ")),
+    brand: null,
+    variant: item.variant,
+    unit: item.unit,
+    barcode: null,
+    category: item.category,
+    subcategory: item.subcategory,
+    source_provider: "zorvi_curated",
+    source_product_id: item.source_product_id,
+    source_url: null,
+    image_url: null,
+    description: "Produto de referência para busca e comparação. O cadastro não confirma disponibilidade, preço ou estoque em qualquer loja.",
+    country_code: "BR",
+    source_updated_at: now,
+    is_active: true,
+  }));
+  const { data, error } = await admin.from("products")
+    .upsert(rows, { onConflict: "source_provider,source_product_id" })
+    .select("id,name,brand,variant,source_product_id");
+  if (error) throw new Error("Curated product upsert failed: " + error.message);
+  const aliasesBySourceId = new Map(CURATED_PRODUCTS.map((item) => [item.source_product_id, item.aliases]));
+  const saved = (data || []).map((item) => ({
+    ...item,
+    aliases: aliasesBySourceId.get(item.source_product_id) || [],
+  }));
+  const aliases = await saveAliases(saved, "zorvi_curated");
+  return { imported: saved.length, aliases, provider: "zorvi_curated" };
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const radians = (value: number) => value * Math.PI / 180;
+  const dLat = radians(lat2 - lat1);
+  const dLon = radians(lon2 - lon1);
+  const arc = Math.sin(dLat / 2) ** 2
+    + Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
+}
+
+function normalizeStoreName(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function matchOpenPricesStore(location: {
+  osm_name?: string | null;
+  osm_display_name?: string | null;
+  osm_address_city?: string | null;
+  osm_address_country_code?: string | null;
+  osm_lat?: number | null;
+  osm_lon?: number | null;
+}, stores: Array<{
+  id: string;
+  name: string;
+  brand_name: string | null;
+  address: string;
+  city: string;
+  state: string;
+  latitude: number | null;
+  longitude: number | null;
+}>) {
+  const locationText = normalizeStoreName([location.osm_name, location.osm_display_name].filter(Boolean).join(" "));
+  const locationCity = normalizeStoreName(location.osm_address_city || "");
+  const country = normalizeStoreName(location.osm_address_country_code || "");
+  if (!locationText || !Number.isFinite(Number(location.osm_lat)) || !Number.isFinite(Number(location.osm_lon))) return null;
+  if (country && country !== "br" && !country.includes("brazil")) return null;
+
+  const candidates = stores.map((store) => {
+    if (normalizeStoreName(store.city) !== locationCity) return null;
+    if (store.latitude === null || store.longitude === null) return null;
+    const brand = store.brand_name || store.name.split(" - ")[0].split(" — ")[0];
+    const brandTokens = normalizeStoreName(brand).split(/\s+/)
+      .filter((token) => token.length >= 3 && !["super", "supermercado", "farmacia", "farmacias", "drogaria", "mercado", "atacarejo", "loja"].includes(token));
+    if (!brandTokens.length || !brandTokens.every((token) => locationText.includes(token))) return null;
+
+    const distance = distanceKm(
+      Number(location.osm_lat),
+      Number(location.osm_lon),
+      store.latitude,
+      store.longitude,
+    );
+    const storeNumber = String(store.address).match(/\b\d+[a-z]?\b/i)?.[0]?.toLowerCase() || "";
+    const locationNumber = String(location.osm_display_name || "").match(/\b\d+[a-z]?\b/i)?.[0]?.toLowerCase() || "";
+    const numberMatch = Boolean(storeNumber && locationNumber && storeNumber === locationNumber);
+    if (!numberMatch && distance > 0.18) return null;
+    return { store, distance, numberMatch };
+  }).filter((item): item is { store: typeof stores[number]; distance: number; numberMatch: boolean } => Boolean(item));
+
+  candidates.sort((a, b) => a.distance - b.distance);
+  return candidates[0]?.store || null;
+}
+
+async function importOpenPrices() {
+  const { data: stores, error: storeError } = await admin.from("stores")
+    .select("id,name,brand_name,address,city,state,latitude,longitude")
+    .eq("verification_status", "verified")
+    .limit(1000);
+  if (storeError) throw new Error("Could not load stores for Open Prices matching: " + storeError.message);
+
+  const regions = new Map<string, typeof stores>();
+  (stores || []).filter((store) => store.latitude !== null && store.longitude !== null).forEach((store) => {
+    const key = normalizeStoreName(store.city) + "|" + normalizeStoreName(store.state);
+    const current = regions.get(key) || [];
+    current.push(store);
+    regions.set(key, current);
+  });
+
+  const cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let found = 0;
+  let imported = 0;
+  let unmatchedStores = 0;
+  let unmatchedProducts = 0;
+  let skippedWithoutEvidence = 0;
+  const regionResults: Array<Record<string, unknown>> = [];
+
+  for (const regionStores of regions.values()) {
+    if (!regionStores.length) continue;
+    const city = regionStores[0].city;
+    const state = regionStores[0].state;
+    const lat = regionStores.reduce((sum, store) => sum + Number(store.latitude), 0) / regionStores.length;
+    const lon = regionStores.reduce((sum, store) => sum + Number(store.longitude), 0) / regionStores.length;
+    const url = new URL("https://prices.openfoodfacts.org/api/v1/prices");
+    url.searchParams.set("currency", "BRL");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lon));
+    url.searchParams.set("radius_km", "20");
+    url.searchParams.set("date__gte", cutoffDate);
+    url.searchParams.set("duplicate_of__isnull", "true");
+    url.searchParams.set("size", "100");
+    url.searchParams.set("page", "1");
+    url.searchParams.set("type", "PRODUCT");
+    url.searchParams.set("location__type", "OSM");
+
+    let payload: {
+      items?: Array<{
+        id: number;
+        product_code?: string | null;
+        product_name?: string | null;
+        price?: number | string | null;
+        currency?: string | null;
+        date?: string | null;
+        duplicate_of?: number | null;
+        location?: {
+          osm_name?: string | null;
+          osm_display_name?: string | null;
+          osm_address_city?: string | null;
+          osm_address_country_code?: string | null;
+          osm_lat?: number | null;
+          osm_lon?: number | null;
+        } | null;
+        proof?: {
+          type?: string | null;
+          file_path?: string | null;
+          draft?: boolean;
+        } | null;
+      }>;
+      total?: number;
+      pages?: number;
+    };
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
+        "Accept": "application/json",
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) {
+      regionResults.push({ city, state, status: response.status, found: 0, imported: 0 });
+      continue;
+    }
+    payload = await response.json() as typeof payload;
+    const items = payload.items || [];
+    found += items.length;
+
+    const matched = items.map((item) => ({
+      item,
+      store: item.location ? matchOpenPricesStore(item.location, regionStores) : null,
+    }));
+    unmatchedStores += matched.filter((entry) => !entry.store).length;
+    const eligible = matched.filter((entry) =>
+      Boolean(entry.store && entry.item.product_code && entry.item.price && Number(entry.item.price) > 0
+        && entry.item.currency === "BRL" && entry.item.date && entry.item.date >= cutoffDate
+        && !entry.item.duplicate_of)
+    );
+    const barcodes = [...new Set(eligible.map((entry) => String(entry.item.product_code)))];
+    const productResult = barcodes.length
+      ? await admin.from("products").select("id,barcode").in("barcode", barcodes)
+      : { data: [], error: null };
+    if (productResult.error) throw new Error("Could not match Open Prices products: " + productResult.error.message);
+    const productByBarcode = new Map((productResult.data || []).map((product) => [product.barcode, product.id]));
+
+    const rows: Array<Record<string, unknown>> = [];
+    for (const entry of eligible) {
+      const item = entry.item;
+      const productId = productByBarcode.get(String(item.product_code));
+      if (!productId) {
+        unmatchedProducts += 1;
+        continue;
+      }
+      const proofType = String(item.proof?.type || "");
+      const hasEvidence = Boolean(item.proof?.file_path) && item.proof?.draft !== true
+        && ["PRICE_TAG", "RECEIPT"].includes(proofType);
+      if (!hasEvidence) {
+        skippedWithoutEvidence += 1;
+        continue;
+      }
+      rows.push({
+        product_id: productId,
+        store_id: entry.store!.id,
+        price: Number(item.price),
+        currency: "BRL",
+        price_type: "community_report",
+        source_url: "https://prices.openfoodfacts.org/prices/" + item.id,
+        source_label: "Open Prices · " + (proofType === "PRICE_TAG" ? "foto da etiqueta" : "recibo") + " · " + item.date + " · contribuição comunitária com evidência",
+        observed_at: new Date(item.date + "T12:00:00.000Z").toISOString(),
+        availability_status: "unknown",
+        verification_status: "verified",
+        confidence_score: proofType === "PRICE_TAG" ? 0.92 : 0.88,
+        submitted_by: null,
+      });
+    }
+
+    const sourceUrls = rows.map((row) => String(row.source_url));
+    const existingResult = sourceUrls.length
+      ? await admin.from("price_observations").select("source_url").in("source_url", sourceUrls)
+      : { data: [], error: null };
+    if (existingResult.error) throw new Error("Could not check duplicate Open Prices observations: " + existingResult.error.message);
+    const existingUrls = new Set((existingResult.data || []).map((row) => row.source_url));
+    const newRows = rows.filter((row) => !existingUrls.has(String(row.source_url)));
+    if (newRows.length) {
+      const insertResult = await admin.from("price_observations").insert(newRows);
+      if (insertResult.error) throw new Error("Open Prices observation import failed: " + insertResult.error.message);
+      imported += newRows.length;
+    }
+    regionResults.push({
+      city,
+      state,
+      found: items.length,
+      imported: newRows.length,
+      totalAvailable: payload.total || 0,
+    });
+  }
+
+  return {
+    provider: "open_prices",
+    windowDays: 30,
+    currency: "BRL",
+    found,
+    imported,
+    unmatchedStores,
+    unmatchedProducts,
+    skippedWithoutEvidence,
+    regions: regionResults,
+    note: "Only recent Brazil-real prices with photo evidence and a strict store name/location match are imported. Availability remains unknown.",
   };
 }
 
@@ -460,14 +977,26 @@ Deno.serve(async (request: Request) => {
   try {
     const body = await request.json().catch(() => ({}));
     const source = String(body?.source || "all");
-    if (!["all", "open_food_facts", "anvisa"].includes(source)) {
-      return Response.json({ error: "Invalid source. Use all, open_food_facts or anvisa." }, { status: 400 });
+    if (!["all", "open_food_facts", "open_beauty_facts", "open_products_facts", "open_prices", "zorvi_curated", "anvisa"].includes(source)) {
+      return Response.json({ error: "Invalid source. Use all, open_food_facts, open_beauty_facts, open_products_facts, open_prices, zorvi_curated or anvisa." }, { status: 400 });
     }
 
     const startedAt = new Date().toISOString();
     const results: Record<string, unknown> = {};
+    if (source === "all" || source === "zorvi_curated") {
+      results.zorvi_curated = await importZorviCurated();
+    }
     if (source === "all" || source === "open_food_facts") {
-      results.open_food_facts = await importOpenFoodFacts();
+      results.open_food_facts = await importOpenFoodFacts(body?.term_offset, body?.term_limit);
+    }
+    if (source === "open_beauty_facts") {
+      results.open_beauty_facts = await importOpenBeautyFacts(body?.term_offset, body?.term_limit);
+    }
+    if (source === "open_products_facts") {
+      results.open_products_facts = await importOpenProductsFacts(body?.term_offset, body?.term_limit);
+    }
+    if (source === "open_prices") {
+      results.open_prices = await importOpenPrices();
     }
     if (source === "all" || source === "anvisa") {
       results.anvisa = await importAnvisa(body?.row_offset, body?.row_limit);
