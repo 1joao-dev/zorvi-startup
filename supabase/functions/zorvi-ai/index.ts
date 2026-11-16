@@ -14,6 +14,17 @@ type ProductRow = {
   variant: string | null;
   unit: string | null;
   category: string;
+  subcategory?: string | null;
+  source_provider?: string | null;
+  source_product_id?: string | null;
+  image_url?: string | null;
+  description?: string | null;
+};
+
+type ProductAliasRow = {
+  product_id: string;
+  alias: string;
+  normalized_alias: string;
 };
 
 type StoreRow = {
@@ -208,71 +219,246 @@ function isFollowUpQuestion(value: string): boolean {
     || /^(na minha regiao|perto de mim|tem na minha regiao|tem perto de mim|qual deles|qual delas|e tambem|tambem)\b/.test(question);
 }
 
-function buildProductSearchQuestion(messages: ChatMessage[], products: ProductRow[]): string {
+function buildProductSearchQuestion(
+  messages: ChatMessage[],
+  products: ProductRow[],
+  aliases: ProductAliasRow[],
+): string {
   const latest = messages[messages.length - 1];
   if (!latest || !isFollowUpQuestion(latest.content)) return latest?.content || "";
 
   const previousUser = [...messages.slice(0, -1)].reverse().find((message) => message.role === "user");
   if (!previousUser) return latest.content;
 
+  const aliasesByProduct = new Map<string, string[]>();
+  aliases.forEach((alias) => {
+    const current = aliasesByProduct.get(alias.product_id) || [];
+    current.push(alias.alias, alias.normalized_alias);
+    aliasesByProduct.set(alias.product_id, current);
+  });
   const knownProductTokens = new Set(products.flatMap((product) =>
     searchTokens([
-      product.name,
-      product.normalized_name,
-      product.brand || "",
-      product.variant || "",
-      product.unit || "",
+      product.name, product.normalized_name, product.brand || "",
+      product.variant || "", product.unit || "",
+      ...(aliasesByProduct.get(product.id) || []),
     ].join(" "))
   ));
   const modifiers = searchTokens(latest.content).filter((token) =>
     knownProductTokens.has(token) || productFollowUpTerms.has(token) || /^\d+$/.test(token)
   );
-
   return [previousUser.content, ...modifiers].join(" ").trim();
 }
 
-function findMatchingProducts(question: string, products: ProductRow[]): ProductMatch {
+function findMatchingProducts(
+  question: string,
+  products: ProductRow[],
+  aliases: ProductAliasRow[],
+): ProductMatch {
   const tokens = searchTokens(question);
   if (!tokens.length) return { candidates: [], selected: null, ambiguous: false };
 
+  const aliasesByProduct = new Map<string, string[]>();
+  aliases.forEach((alias) => {
+    const current = aliasesByProduct.get(alias.product_id) || [];
+    current.push(alias.alias, alias.normalized_alias);
+    aliasesByProduct.set(alias.product_id, current);
+  });
+
   const ranked = products
     .map((product) => {
+      const productAliases = aliasesByProduct.get(product.id) || [];
       const searchableTokens = new Set(searchTokens([
-        product.name,
-        product.normalized_name,
-        product.brand || "",
-        product.variant || "",
-        product.unit || "",
+        product.name, product.normalized_name, product.brand || "",
+        product.variant || "", product.unit || "", ...productAliases,
       ].join(" ")));
       const brandTokens = new Set(searchTokens(product.brand || ""));
       const matchedTokens = tokens.filter((token) => searchableTokens.has(token));
       const brandMatches = tokens.filter((token) => brandTokens.has(token));
       const coverage = matchedTokens.length / tokens.length;
-      const exactNameBonus = normalize(question).includes(normalize(product.name)) ? 2 : 0;
-      const score = matchedTokens.length + brandMatches.length * 1.5 + exactNameBonus;
+      const normalizedQuestion = normalize(question);
+      const exactNameBonus = normalizedQuestion.includes(normalize(product.name)) ? 2 : 0;
+      const exactAliasBonus = productAliases.some((alias) => normalize(alias) === normalizedQuestion) ? 2.5 : 0;
+      const score = matchedTokens.length + brandMatches.length * 1.5 + exactNameBonus + exactAliasBonus;
       return { product, score, coverage, matchedCount: matchedTokens.length };
     })
     .filter((item) => item.matchedCount > 0 && item.coverage >= 0.34)
     .sort((a, b) => b.score - a.score || b.coverage - a.coverage || a.product.name.localeCompare(b.product.name, "pt-BR"));
 
   if (!ranked.length) return { candidates: [], selected: null, ambiguous: false };
-
   const best = ranked[0];
   const second = ranked[1];
   const ambiguous = Boolean(
-    second
-      && best.coverage >= 0.5
-      && second.coverage >= 0.5
+    second && best.coverage >= 0.5 && second.coverage >= 0.5
       && Math.abs(best.score - second.score) < 1.25
       && Math.abs(best.coverage - second.coverage) < 0.2
   );
   const selected = best.coverage >= 0.5 && !ambiguous ? best.product : null;
-
   return {
     candidates: ranked.slice(0, 5).map((item) => item.product),
     selected,
     ambiguous,
   };
+}
+
+async function discoverOpenFoodFactsProducts(
+  admin: ReturnType<typeof createClient>,
+  question: string,
+): Promise<{ products: ProductRow[]; aliases: ProductAliasRow[] }> {
+  const searchTerm = searchTokens(question).slice(0, 6).join(" ").trim();
+  if (!searchTerm) return { products: [], aliases: [] };
+
+  const queryKey = normalize(searchTerm);
+  const now = Date.now();
+  const queryCache = await admin.from("product_catalog_search_cache")
+    .select("fetched_at").eq("query_key", queryKey).maybeSingle();
+  if (queryCache.data?.fetched_at && now - new Date(queryCache.data.fetched_at).getTime() < 7 * 24 * 60 * 60 * 1000) {
+    return { products: [], aliases: [] };
+  }
+
+  const globalCache = await admin.from("product_catalog_search_cache")
+    .select("fetched_at").eq("query_key", "__open_food_facts_global__").maybeSingle();
+  if (globalCache.data?.fetched_at && now - new Date(globalCache.data.fetched_at).getTime() < 6500) {
+    return { products: [], aliases: [] };
+  }
+
+  const fetchedAt = new Date().toISOString();
+  await admin.from("product_catalog_search_cache").upsert({
+    query_key: "__open_food_facts_global__",
+    provider: "open_food_facts",
+    fetched_at: fetchedAt,
+    result_count: 0,
+  }, { onConflict: "query_key" });
+
+  try {
+    const url = new URL("https://world.openfoodfacts.org/cgi/search.pl");
+    url.searchParams.set("search_terms", searchTerm);
+    url.searchParams.set("search_simple", "1");
+    url.searchParams.set("action", "process");
+    url.searchParams.set("json", "1");
+    url.searchParams.set("page_size", "24");
+    url.searchParams.set("fields", "code,product_name,brands,quantity,categories_tags,countries_tags,image_front_url,last_modified_t");
+    url.searchParams.set("tagtype_0", "countries");
+    url.searchParams.set("tag_contains_0", "contains");
+    url.searchParams.set("tag_0", "brazil");
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
+        "Accept": "application/json",
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) {
+      console.warn("[zorvi-ai] Open Food Facts indisponível.", { status: response.status });
+      return { products: [], aliases: [] };
+    }
+
+    const payload = await response.json() as {
+      products?: Array<{
+        code?: string;
+        product_name?: string;
+        brands?: string;
+        quantity?: string;
+        categories_tags?: string[];
+        countries_tags?: string[];
+        image_front_url?: string;
+        last_modified_t?: number;
+      }>;
+    };
+    const externalProducts = (payload.products || [])
+      .filter((item) => Boolean(item.code && item.product_name?.trim()))
+      .filter((item) => !item.countries_tags?.length || item.countries_tags.some((tag) => normalize(tag).includes("brazil")))
+      .slice(0, 24);
+
+    if (!externalProducts.length) {
+      await admin.from("product_catalog_search_cache").upsert({
+        query_key: queryKey, provider: "open_food_facts", fetched_at: fetchedAt, result_count: 0,
+      }, { onConflict: "query_key" });
+      return { products: [], aliases: [] };
+    }
+
+    const barcodes = externalProducts.map((item) => item.code as string);
+    const existingResult = await admin.from("products")
+      .select("barcode,source_provider").in("barcode", barcodes);
+    const protectedBarcodes = new Set(
+      (existingResult.data || [])
+        .filter((row) => row.source_provider !== "open_food_facts")
+        .map((row) => row.barcode)
+    );
+
+    const rows = externalProducts
+      .filter((item) => !protectedBarcodes.has(item.code as string))
+      .map((item) => {
+        const name = (item.product_name || "").trim().slice(0, 180);
+        const brand = cleanString(item.brands, 120);
+        const quantity = cleanString(item.quantity, 80);
+        const code = item.code as string;
+        return {
+          name,
+          normalized_name: normalize([name, brand || "", quantity || ""].join(" ")),
+          brand,
+          variant: quantity,
+          unit: quantity,
+          barcode: code,
+          category: "Mercado",
+          subcategory: item.categories_tags?.[0]?.replace(/^[a-z]{2}:/, "").slice(0, 100) || "Alimentos",
+          source_provider: "open_food_facts",
+          source_product_id: code,
+          source_url: "https://world.openfoodfacts.org/product/" + encodeURIComponent(code),
+          image_url: item.image_front_url?.startsWith("https://") ? item.image_front_url : null,
+          description: "Metadados públicos do Open Food Facts. Não confirmam disponibilidade, preço ou estoque em lojas.",
+          country_code: "BR",
+          source_updated_at: item.last_modified_t ? new Date(item.last_modified_t * 1000).toISOString() : null,
+          is_active: true,
+        };
+      })
+      .filter((item) => item.name.length > 1);
+
+    if (!rows.length) {
+      await admin.from("product_catalog_search_cache").upsert({
+        query_key: queryKey, provider: "open_food_facts", fetched_at: fetchedAt, result_count: 0,
+      }, { onConflict: "query_key" });
+      return { products: [], aliases: [] };
+    }
+
+    const savedResult = await admin.from("products")
+      .upsert(rows, { onConflict: "source_provider,source_product_id" })
+      .select("id,name,normalized_name,brand,variant,unit,category,subcategory,source_provider,source_product_id,image_url,description");
+    if (savedResult.error || !savedResult.data?.length) {
+      console.warn("[zorvi-ai] Não foi possível salvar produtos do Open Food Facts.", savedResult.error?.message);
+      return { products: [], aliases: [] };
+    }
+
+    const aliasMap = new Map<string, ProductAliasRow>();
+    savedResult.data.forEach((product) => {
+      const candidates = [product.name, product.brand, product.variant, [product.brand, product.name].filter(Boolean).join(" ")];
+      candidates.forEach((candidate) => {
+        if (!candidate) return;
+        const normalizedAlias = normalize(candidate);
+        if (!normalizedAlias) return;
+        aliasMap.set(product.id + ":" + normalizedAlias, {
+          product_id: product.id, alias: candidate.slice(0, 160), normalized_alias: normalizedAlias,
+        });
+      });
+    });
+    const importedAliases = [...aliasMap.values()];
+    if (importedAliases.length) {
+      const aliasInsert = await admin.from("product_aliases").upsert(
+        importedAliases.map((alias) => ({ ...alias, source_provider: "open_food_facts" })),
+        { onConflict: "product_id,normalized_alias", ignoreDuplicates: true },
+      );
+      if (aliasInsert.error) console.warn("[zorvi-ai] Falha ao salvar sinônimos de produtos.", aliasInsert.error.message);
+    }
+
+    await admin.from("product_catalog_search_cache").upsert({
+      query_key: queryKey, provider: "open_food_facts", fetched_at: fetchedAt, result_count: savedResult.data.length,
+    }, { onConflict: "query_key" });
+
+    return { products: savedResult.data as ProductRow[], aliases: importedAliases };
+  } catch (error) {
+    console.warn("[zorvi-ai] Falha na descoberta externa de produtos.", error instanceof Error ? error.message : String(error));
+    return { products: [], aliases: [] };
+  }
 }
 
 function buildStoreContext(
@@ -505,6 +691,7 @@ const systemPrompt = [
   "Responda sempre em português brasileiro, com linguagem natural, simpática, objetiva e útil. Faça uma pergunta de esclarecimento por vez quando faltar uma informação importante.",
   "FONTE DE VERDADE: use exclusivamente o contexto de dados do Supabase enviado nesta solicitação para afirmar quais produtos, lojas, preços, promoções, endereços, disponibilidade e distâncias existem no catálogo da ZORVI.",
   "Os produtos listados em products são apenas itens cadastrados. Isso não prova que uma loja tenha o produto, preço ou estoque.",
+  "Produtos importados do Open Food Facts e da ANVISA são referências de catálogo. Essas fontes não confirmam preço, disponibilidade, estoque ou presença em uma loja específica.",
   "Só apresente preços que estejam em verified_prices. Esses registros foram filtrados pelo sistema para status verificado, estabelecimento verificado e observações dos últimos 30 dias.",
   "Se verified_price_count for zero, diga claramente que ainda não há preço verificado para a busca. Nunca invente, estime ou deduza um preço, desconto, economia ou disponibilidade.",
   "Não escreva valores monetários numéricos na resposta em texto. Quando houver ofertas, a interface exibirá cartões com os preços exatos e as fontes.",
@@ -560,10 +747,15 @@ Deno.serve(async (request: Request) => {
   const now = new Date();
   const freshnessCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [productsResult, storesResult, pricesResult] = await Promise.all([
+  const [productsResult, aliasesResult, storesResult, pricesResult] = await Promise.all([
     admin.from("products")
-      .select("id,name,normalized_name,brand,variant,unit,category")
-      .limit(100),
+      .select("id,name,normalized_name,brand,variant,unit,category,subcategory,source_provider,source_product_id,image_url,description")
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+      .limit(1000),
+    admin.from("product_aliases")
+      .select("product_id,alias,normalized_alias")
+      .limit(5000),
     admin.from("stores")
       .select("id,name,category,address,city,state,latitude,longitude,verification_status")
       .eq("verification_status", "verified")
@@ -579,21 +771,36 @@ Deno.serve(async (request: Request) => {
       .limit(100),
   ]);
 
-  if (productsResult.error || storesResult.error || pricesResult.error) {
+  if (productsResult.error || aliasesResult.error || storesResult.error || pricesResult.error) {
     console.error("[zorvi-ai] Falha ao consultar catálogo Supabase.", {
       products: productsResult.error?.message,
+      aliases: aliasesResult.error?.message,
       stores: storesResult.error?.message,
       prices: pricesResult.error?.message,
     });
     return json({ error: "Não foi possível consultar o catálogo agora. Tente novamente." }, 500);
   }
 
-  const products = (productsResult.data || []) as ProductRow[];
+  let products = (productsResult.data || []) as ProductRow[];
+  let productAliases = (aliasesResult.data || []) as ProductAliasRow[];
   const stores = ((storesResult.data || []) as StoreRow[]).filter((store) =>
     storeMatchesRegion(store, location)
   );
-  const productSearchQuestion = buildProductSearchQuestion(messages, products);
-  const productMatch = findMatchingProducts(productSearchQuestion, products);
+  let productSearchQuestion = buildProductSearchQuestion(messages, products, productAliases);
+  let productMatch = findMatchingProducts(productSearchQuestion, products, productAliases);
+  const hasProductSearchIntent = /\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\b/.test(normalize(lastMessage.content));
+  const explicitlyNonFoodSearch = /\b(farmacia|farmacias|medicamento|medicamentos|remedio|remedios|dipirona|paracetamol|ibuprofeno|omeprazol|shampoo|xampu|condicionador|creme dental|desodorante|protetor solar|fralda|absorvente|sabonete|hidratante|gaze|algodao)\b/.test(normalize(lastMessage.content));
+
+  if (!productMatch.candidates.length && hasProductSearchIntent && !explicitlyNonFoodSearch) {
+    const discovered = await discoverOpenFoodFactsProducts(admin, productSearchQuestion);
+    if (discovered.products.length) {
+      products = [...products, ...discovered.products];
+      productAliases = [...productAliases, ...discovered.aliases];
+      productSearchQuestion = buildProductSearchQuestion(messages, products, productAliases);
+      productMatch = findMatchingProducts(productSearchQuestion, products, productAliases);
+    }
+  }
+
   const matchingProducts = productMatch.candidates;
   const selectedProduct = productMatch.selected;
   const ambiguousProductMatch = productMatch.ambiguous;
@@ -654,13 +861,16 @@ Deno.serve(async (request: Request) => {
       category: product.category,
     })),
     product_category_counts: productCategoryCounts,
-    products: products.map((product) => ({
+    product_catalog_count: products.length,
+    products: products.slice(0, 60).map((product) => ({
       id: product.id,
       name: product.name,
       brand: product.brand,
       variant: product.variant,
       unit: product.unit,
       category: product.category,
+      subcategory: product.subcategory || null,
+      source_provider: product.source_provider || "zorvi_manual",
     })),
     verified_store_count_in_region: stores.length,
     verified_store_category_counts: storeCategoryCounts,
@@ -699,6 +909,7 @@ Deno.serve(async (request: Request) => {
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
   console.info("[zorvi-ai] contexto carregado", {
     products: products.length,
+    aliases: productAliases.length,
     verifiedStores: stores.length,
     relevantStores: storeContext.length,
     matchingProducts: matchingProducts.length,
