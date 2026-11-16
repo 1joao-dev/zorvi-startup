@@ -219,34 +219,12 @@ function isFollowUpQuestion(value: string): boolean {
     || /^(na minha regiao|perto de mim|tem na minha regiao|tem perto de mim|qual deles|qual delas|e tambem|tambem)\b/.test(question);
 }
 
-function buildProductSearchQuestion(
-  messages: ChatMessage[],
-  products: ProductRow[],
-  aliases: ProductAliasRow[],
-): string {
+function buildProductSearchQuestion(messages: ChatMessage[]): string {
   const latest = messages[messages.length - 1];
   if (!latest || !isFollowUpQuestion(latest.content)) return latest?.content || "";
-
   const previousUser = [...messages.slice(0, -1)].reverse().find((message) => message.role === "user");
   if (!previousUser) return latest.content;
-
-  const aliasesByProduct = new Map<string, string[]>();
-  aliases.forEach((alias) => {
-    const current = aliasesByProduct.get(alias.product_id) || [];
-    current.push(alias.alias, alias.normalized_alias);
-    aliasesByProduct.set(alias.product_id, current);
-  });
-  const knownProductTokens = new Set(products.flatMap((product) =>
-    searchTokens([
-      product.name, product.normalized_name, product.brand || "",
-      product.variant || "", product.unit || "",
-      ...(aliasesByProduct.get(product.id) || []),
-    ].join(" "))
-  ));
-  const modifiers = searchTokens(latest.content).filter((token) =>
-    knownProductTokens.has(token) || productFollowUpTerms.has(token) || /^\d+$/.test(token)
-  );
-  return [previousUser.content, ...modifiers].join(" ").trim();
+  return [previousUser.content, latest.content].join(" ").trim();
 }
 
 function findMatchingProducts(
@@ -575,6 +553,7 @@ function buildCatalogFallback(
   matchingProducts: ProductRow[],
   location: LocationContext,
   ambiguousProductMatch = false,
+  catalogTotalCount = products.length,
 ): string {
   const normalizedQuestion = normalize(question);
   const asksForStores = /\b(farmacia|farmacias|mercado|mercados|supermercado|supermercados|restaurante|restaurantes|loja|lojas|estabelecimento|estabelecimentos|perto|proximo|proximos)\b/.test(normalizedQuestion);
@@ -642,8 +621,9 @@ function buildCatalogFallback(
   const asksForProductList = /\b(produto|produtos|catalogo|lista|listar)\b/.test(normalizedQuestion)
     && /\b(quais|lista|listar|catalogo|existem|temos|cadastrados|cadastradas|mostre|mostrar)\b/.test(normalizedQuestion);
   if (asksForProductList) {
-    return products.length
-      ? "Atualmente, o catálogo da ZORVI contém: " + products.slice(0, 12).map((product) => product.name).join("; ") + ". "
+    return catalogTotalCount > 0
+      ? "Atualmente, o catálogo da ZORVI contém " + catalogTotalCount + " produtos de referência. Alguns exemplos: "
+        + products.slice(0, 12).map((product) => product.name).join("; ") + ". "
         + "A presença no catálogo não significa que exista preço ou estoque confirmado."
       : "Ainda não há produtos cadastrados no catálogo consultado.";
   }
@@ -674,10 +654,10 @@ function buildCatalogFallback(
     return "Ainda não encontrei esse produto no catálogo atual. Tente informar o nome, a marca ou a apresentação exata para eu conferir novamente.";
   }
 
-  if (products.length > 0) {
+  if (catalogTotalCount > 0) {
     return "Olá! Sou a ZORVI AI, assistente de descoberta local e comparação de preços. "
       + "Posso pesquisar produtos cadastrados, comparar preços verificados e localizar farmácias e mercados. "
-      + "Hoje o catálogo consultado tem " + products.length + " produtos e " + stores.length + " estabelecimentos verificados. "
+      + "Hoje o catálogo consultado tem " + catalogTotalCount + " produtos e " + stores.length + " estabelecimentos verificados. "
       + "O que você quer encontrar?";
   }
 
@@ -746,16 +726,16 @@ Deno.serve(async (request: Request) => {
   const location = parseLocation(body.location);
   const now = new Date();
   const freshnessCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const productSearchQuestion = buildProductSearchQuestion(messages);
+  const searchTerms = searchTokens(productSearchQuestion)
+    .filter((token) => token.length >= 3 || /^\d{2,}$/.test(token))
+    .join(" ");
+  const normalizedLastQuestion = normalize(lastMessage.content);
+  const asksForProductList = /\b(produto|produtos|catalogo|lista|listar)\b/.test(normalizedLastQuestion)
+    && /\b(quais|lista|listar|catalogo|existem|temos|cadastrados|cadastradas|mostre|mostrar)\b/.test(normalizedLastQuestion);
 
-  const [productsResult, aliasesResult, storesResult, pricesResult] = await Promise.all([
-    admin.from("products")
-      .select("id,name,normalized_name,brand,variant,unit,category,subcategory,source_provider,source_product_id,image_url,description")
-      .eq("is_active", true)
-      .order("name", { ascending: true })
-      .limit(1000),
-    admin.from("product_aliases")
-      .select("product_id,alias,normalized_alias")
-      .limit(5000),
+  const [summaryResult, storesResult, pricesResult] = await Promise.all([
+    admin.rpc("get_product_catalog_summary"),
     admin.from("stores")
       .select("id,name,category,address,city,state,latitude,longitude,verification_status")
       .eq("verification_status", "verified")
@@ -771,10 +751,18 @@ Deno.serve(async (request: Request) => {
       .limit(100),
   ]);
 
-  if (productsResult.error || aliasesResult.error || storesResult.error || pricesResult.error) {
+  const productsResult = searchTerms
+    ? await admin.rpc("search_product_catalog", { search_query: searchTerms, result_limit: 50 })
+    : await admin.from("products")
+      .select("id,name,normalized_name,brand,variant,unit,category,subcategory,source_provider,source_product_id,image_url,description")
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+      .limit(12);
+
+  if (summaryResult.error || productsResult.error || storesResult.error || pricesResult.error) {
     console.error("[zorvi-ai] Falha ao consultar catálogo Supabase.", {
+      summary: summaryResult.error?.message,
       products: productsResult.error?.message,
-      aliases: aliasesResult.error?.message,
       stores: storesResult.error?.message,
       prices: pricesResult.error?.message,
     });
@@ -782,22 +770,39 @@ Deno.serve(async (request: Request) => {
   }
 
   let products = (productsResult.data || []) as ProductRow[];
-  let productAliases = (aliasesResult.data || []) as ProductAliasRow[];
+  let productAliases: ProductAliasRow[] = [];
+  if (products.length) {
+    const aliasesResult = await admin.from("product_aliases")
+      .select("product_id,alias,normalized_alias")
+      .in("product_id", products.map((product) => product.id))
+      .limit(1000);
+    if (aliasesResult.error) {
+      console.error("[zorvi-ai] Falha ao consultar sinônimos do catálogo.", aliasesResult.error.message);
+      return json({ error: "Não foi possível consultar os sinônimos do catálogo agora. Tente novamente." }, 500);
+    }
+    productAliases = (aliasesResult.data || []) as ProductAliasRow[];
+  }
+
+  let catalogSummary = summaryResult.data as { total_count?: number; category_counts?: Record<string, number> } | null;
+  let catalogTotalCount = Number(catalogSummary?.total_count || 0);
   const stores = ((storesResult.data || []) as StoreRow[]).filter((store) =>
     storeMatchesRegion(store, location)
   );
-  let productSearchQuestion = buildProductSearchQuestion(messages, products, productAliases);
   let productMatch = findMatchingProducts(productSearchQuestion, products, productAliases);
   const hasProductSearchIntent = /\b(preco|precos|barato|barata|custa|comprar|produto|produtos|encontro|encontrar|vende|tem|comparar|procuro|buscar)\b/.test(normalize(lastMessage.content));
   const explicitlyNonFoodSearch = /\b(farmacia|farmacias|medicamento|medicamentos|remedio|remedios|dipirona|paracetamol|ibuprofeno|omeprazol|shampoo|xampu|condicionador|creme dental|desodorante|protetor solar|fralda|absorvente|sabonete|hidratante|gaze|algodao)\b/.test(normalize(lastMessage.content));
 
-  if (!productMatch.candidates.length && hasProductSearchIntent && !explicitlyNonFoodSearch) {
+  if (!productMatch.candidates.length && hasProductSearchIntent && !explicitlyNonFoodSearch && searchTerms) {
     const discovered = await discoverOpenFoodFactsProducts(admin, productSearchQuestion);
     if (discovered.products.length) {
       products = [...products, ...discovered.products];
       productAliases = [...productAliases, ...discovered.aliases];
-      productSearchQuestion = buildProductSearchQuestion(messages, products, productAliases);
       productMatch = findMatchingProducts(productSearchQuestion, products, productAliases);
+      const refreshedSummary = await admin.rpc("get_product_catalog_summary");
+      if (!refreshedSummary.error && refreshedSummary.data) {
+        catalogSummary = refreshedSummary.data as { total_count?: number; category_counts?: Record<string, number> };
+        catalogTotalCount = Number(catalogSummary.total_count || catalogTotalCount);
+      }
     }
   }
 
@@ -825,12 +830,10 @@ Deno.serve(async (request: Request) => {
     fallbackProducts,
     location,
     ambiguousProductMatch,
+    catalogTotalCount,
   );
 
-  const productCategoryCounts = products.reduce<Record<string, number>>((counts, product) => {
-    counts[product.category] = (counts[product.category] || 0) + 1;
-    return counts;
-  }, {});
+  const productCategoryCounts = catalogSummary?.category_counts || {};
   const storeCategoryCounts = stores.reduce<Record<string, number>>((counts, store) => {
     counts[store.category] = (counts[store.category] || 0) + 1;
     return counts;
@@ -861,7 +864,7 @@ Deno.serve(async (request: Request) => {
       category: product.category,
     })),
     product_category_counts: productCategoryCounts,
-    product_catalog_count: products.length,
+    product_catalog_count: catalogTotalCount,
     products: products.slice(0, 60).map((product) => ({
       id: product.id,
       name: product.name,
@@ -909,6 +912,7 @@ Deno.serve(async (request: Request) => {
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
   console.info("[zorvi-ai] contexto carregado", {
     products: products.length,
+    catalogTotalCount,
     aliases: productAliases.length,
     verifiedStores: stores.length,
     relevantStores: storeContext.length,
