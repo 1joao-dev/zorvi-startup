@@ -1051,6 +1051,7 @@ mapPrice: result ? Number(result.price) : null,
       setPriceResults([]);
       setSearchCandidates([]);
       setSelectedPriceProduct(null);
+      setSearchPerformed(false);
       notify(
         error && typeof error === "object" && "message" in error
           ? String((error as { message?: unknown }).message || "")
