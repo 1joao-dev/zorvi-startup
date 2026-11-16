@@ -1264,3 +1264,142 @@ body,
 .catalog-dot{background:#e9b65c}
 .error-dot{background:#e46b76}
 .chat-input button:disabled{opacity:.4;cursor:not-allowed}
+
+/* ZORVI catalog disambiguation and evidence-based price contributions */
+.map-product-candidates{
+  margin:16px 2px 0;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:var(--surface);
+}
+.map-product-candidates .nearby-head{
+  margin-bottom:8px;
+}
+.map-product-candidates .nearby-head small{
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.45;
+}
+.map-product-candidate{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  width:100%;
+  padding:12px 2px;
+  border:0;
+  border-top:1px solid var(--line);
+  background:transparent;
+  color:var(--text);
+  text-align:left;
+}
+.map-product-candidate span{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+}
+.map-product-candidate b{
+  font-size:11px;
+  line-height:1.35;
+}
+.map-product-candidate small{
+  color:var(--muted);
+  font-size:9px;
+}
+.map-product-candidate svg{
+  flex:none;
+  color:#c49aff;
+}
+.price-report-trigger{
+  flex:none;
+  border:1px solid #a855f766;
+  border-radius:11px;
+  background:#8b35ff18;
+  color:#d8b9ff;
+  padding:9px 11px;
+  font-size:9px;
+  font-weight:750;
+}
+.price-report-empty{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  padding:14px;
+  border:1px dashed var(--line);
+  border-radius:13px;
+  background:var(--surface2);
+}
+.price-report-empty p{
+  margin:0;
+  color:var(--text);
+  font-size:11px;
+  line-height:1.45;
+}
+.price-report-empty small,.price-report-note{
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.5;
+}
+.price-report-modal{
+  max-height:88dvh;
+  overflow:auto;
+  padding-bottom:max(18px,env(safe-area-inset-bottom));
+}
+.price-report-modal .profile-form-label select{
+  width:100%;
+  min-height:42px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface2);
+  color:var(--text);
+  padding:11px;
+  font:inherit;
+  font-size:11px;
+  outline:none;
+}
+.price-report-modal .profile-form-label select:focus{
+  border-color:#9b35ff;
+  box-shadow:0 0 0 3px #7200ff20;
+}
+.price-report-product{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  padding:12px;
+  border:1px solid #9b35ff44;
+  border-radius:13px;
+  background:#7200ff12;
+}
+.price-report-product small{
+  color:#c59aff;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.price-report-product b{
+  font-size:12px;
+  line-height:1.4;
+}
+.price-report-product span{
+  color:var(--muted);
+  font-size:9px;
+}
+.price-report-note{
+  margin:0;
+  padding:10px 11px;
+  border-radius:11px;
+  background:var(--surface2);
+}
+.theme-light .map-product-candidates{
+  background:#fff;
+}
+.theme-light .price-report-trigger{
+  color:#6e31b4;
+  background:#8b35ff0c;
+}
+
