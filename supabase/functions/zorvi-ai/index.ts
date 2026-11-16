@@ -256,8 +256,8 @@ function findMatchingProducts(
       const matchedTokens = tokens.filter((token) => searchableTokens.has(token));
       const brandMatches = tokens.filter((token) => brandTokens.has(token));
       const coverage = matchedTokens.length / tokens.length;
-      const queryNumbers = tokens.filter((token) => /^\\d{2,}$/.test(token));
-      const productNumbers = productTokens.filter((token) => /^\\d{2,}$/.test(token));
+      const queryNumbers = tokens.filter((token) => /^\d{2,}$/.test(token));
+      const productNumbers = productTokens.filter((token) => /^\d{2,}$/.test(token));
       const querySizes = tokens.filter((token) => presentationSizeTokens.has(token));
       const productSizes = productTokens.filter((token) => presentationSizeTokens.has(token));
       const conflictingNumber = queryNumbers.some((token) => productNumbers.length > 0 && !productNumbers.includes(token));
