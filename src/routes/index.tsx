@@ -1380,7 +1380,7 @@ mapPrice: result ? Number(result.price) : null,
           <div className="map-search-row">
             <div className="map-search">
               <Search size={18}/>
-              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Qual produto você procura?" aria-label="Buscar produto"/>
+              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Produto, marca, tamanho ou código de barras" aria-label="Buscar produto"/>
               {query && <button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} aria-label="Limpar busca"><X size={16}/></button>}
             </div>
             <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>
@@ -1547,7 +1547,7 @@ mapPrice: result ? Number(result.price) : null,
           </select>
         </label>
         <label className="profile-form-label">Preço observado (R$)
-          <input type="number" min="0.01" step="0.01" inputMode="decimal" value={priceReportValue} onChange={(event) => setPriceReportValue(event.target.value)} placeholder="Ex.: 12,99"/>
+          <input type="text" inputMode="decimal" maxLength={12} value={priceReportValue} onChange={(event) => setPriceReportValue(event.target.value.replace(/[^0-9,.]/g, ""))} placeholder="Ex.: 12,99"/>
         </label>
         <label className="profile-form-label">Disponibilidade na loja
           <select value={priceReportAvailability} onChange={(event) => setPriceReportAvailability(event.target.value as "available"|"unavailable"|"unknown")}>
