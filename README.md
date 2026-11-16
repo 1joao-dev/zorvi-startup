@@ -108,3 +108,17 @@ Para habilitar a associação:
 5. Antes de disponibilizar a integração ao público, publique Termos de Uso e Política de Privacidade compatíveis com os requisitos do Google Maps Platform.
 
 A verificação é executada em lotes de cinco unidades e evita repetir consultas por 30 dias.
+
+## Moderação administrativa de preços
+
+O painel de moderação fica em **Perfil → Moderação de preços** e permite revisar observações antes de elas aparecerem nas comparações.
+
+- Entre com uma conta autenticada e informe o mesmo token administrativo validado pelo RPC `verify_catalog_import_token` usado pelo importador do catálogo.
+- O token é enviado somente ao Edge Function `price-review`; não é gravado no navegador nem no repositório.
+- O painel exibe produto, apresentação, estabelecimento, valor, data, disponibilidade e link da fonte.
+- A aprovação só é permitida quando o produto está ativo e o estabelecimento está verificado. A disponibilidade não é alterada pela aprovação.
+- Registros rejeitados permanecem no banco com status `rejected`, mas não entram nas comparações.
+- Preços aprovados continuam sujeitos à janela de atualização de 30 dias usada pela busca e pelo mapa.
+
+A função `price-review` exige JWT de uma sessão autenticada e valida o token administrativo no servidor. Nenhuma chave de serviço é enviada ao frontend.
+
