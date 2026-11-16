@@ -138,12 +138,12 @@ if (first.done) throw new Error("O arquivo da ANVISA veio vazio.");
 
 const headers = first.value.map((header) => header.replace(/^\uFEFF/, "").trim());
 const nameIndex = findColumn(headers, ["Nome Produto", "NOME_PRODUTO", "NO_PRODUTO", "Nome do Produto"]);
-const activeIndex = findColumn(headers, ["Princípio Ativo", "PRINCIPIO_ATIVO", "NO_PRINCIPIO_ATIVO"]);
-const registrationIndex = findColumn(headers, ["Número Registro Produto", "NUMERO_REGISTRO_PRODUTO", "NUMERO_REGISTRO", "Registro"]);
-const companyIndex = findColumn(headers, ["Empresa Detentora Registro", "EMPRESA_DETENTORA_REGISTRO", "DETENTORA_REGISTRO"]);
+const activeIndex = findColumn(headers, ["Princípio Ativo", "PRINCIPIO_ATIVO", "NO_PRINCIPIO_ATIVO", "DS_PRINCIPIO_ATIVO"]);
+const registrationIndex = findColumn(headers, ["Número Registro Produto", "Número de Registro do Produto", "NUMERO_REGISTRO_PRODUTO", "NUMERO_REGISTRO", "Registro"]);
+const companyIndex = findColumn(headers, ["Empresa Detentora Registro", "EMPRESA_DETENTORA_REGISTRO", "DETENTORA_REGISTRO", "Razão Social", "RAZAO_SOCIAL", "Nome Empresa", "NOME_EMPRESA"]);
 const categoryIndex = findColumn(headers, ["Categoria Regulatória", "CATEGORIA_REGULATORIA"]);
 const therapeuticIndex = findColumn(headers, ["Classe Terapêutica", "CLASSE_TERAPEUTICA"]);
-const expiryIndex = findColumn(headers, ["Data Vencimento Registro", "DATA_VENCIMENTO_REGISTRO"]);
+const expiryIndex = findColumn(headers, ["Data Vencimento Registro", "Data de Vencimento do Registro", "DATA_VENCIMENTO_REGISTRO"]);
 
 if (nameIndex < 0) {
   throw new Error("Não reconheci a coluna do nome do medicamento. Cabeçalhos recebidos: " + headers.join(" | "));
