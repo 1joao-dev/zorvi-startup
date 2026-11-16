@@ -177,6 +177,108 @@ async function probeAtacadaoStorePages() {
   return results;
 }
 
+
+async function probeRegionalization(provider: Provider, postalCode: string, term: string) {
+  const base = "https://" + provider.domain;
+  const startedAt = Date.now();
+  try {
+    const sessionResponse = await fetch(base + "/api/sessions", {
+      method: "POST",
+      headers: {
+        "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({
+        public: {
+          country: { value: "BRA" },
+          postalCode: { value: postalCode },
+        },
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const setCookie = typeof sessionResponse.headers.getSetCookie === "function"
+      ? sessionResponse.headers.getSetCookie()
+      : [sessionResponse.headers.get("set-cookie") || ""];
+    const cookies = setCookie.flatMap((line) => line.split(/, (?=[^;,]+=)/))
+      .map((line) => line.split(";")[0].trim())
+      .filter(Boolean);
+    const cookieHeader = cookies.join("; ");
+
+    const regionUrl = new URL(base + "/api/checkout/pub/regions");
+    regionUrl.searchParams.set("country", "BRA");
+    regionUrl.searchParams.set("postalCode", postalCode);
+    const regionResponse = await fetch(regionUrl, {
+      headers: { "User-Agent": "ZORVI/1.0", "Accept": "application/json" },
+      signal: AbortSignal.timeout(20000),
+    });
+    const regionText = await regionResponse.text();
+    let regionPayload: unknown = null;
+    try { regionPayload = JSON.parse(regionText); } catch { /* no region JSON */ }
+    const regionRows = Array.isArray(regionPayload) ? regionPayload as Array<Record<string, unknown>> : [];
+    const regionId = regionRows[0]?.id ?? regionRows[0]?.regionId ?? null;
+    const sellers = Array.isArray(regionRows[0]?.sellers)
+      ? (regionRows[0]!.sellers as Array<Record<string, unknown>>).map((seller) => ({
+          id: seller.id ?? null,
+          name: seller.name ?? null,
+        }))
+      : [];
+
+    const searchUrl = new URL(provider.searchUrl);
+    searchUrl.searchParams.set("ft", term);
+    searchUrl.searchParams.set("_from", "0");
+    searchUrl.searchParams.set("_to", "4");
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "ZORVI/1.0",
+        "Accept": "application/json",
+        ...(cookieHeader ? { "Cookie": cookieHeader } : {}),
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    const searchText = await searchResponse.text();
+    let searchPayload: unknown = null;
+    try { searchPayload = JSON.parse(searchText); } catch { /* no search JSON */ }
+    const products = Array.isArray(searchPayload) ? searchPayload as Array<Record<string, unknown>> : [];
+    const first = products[0] || null;
+    const item = Array.isArray(first?.items) ? (first!.items as Array<Record<string, unknown>>)[0] : null;
+    const sellersForItem = Array.isArray(item?.sellers) ? item!.sellers as Array<Record<string, unknown>> : [];
+    const seller = sellersForItem[0] || null;
+    const offer = seller?.commertialOffer && typeof seller.commmertialOffer === "object"
+      ? seller.commmertialOffer as Record<string, unknown>
+      : seller?.commertialOffer && typeof seller.commertialOffer === "object"
+        ? seller.commertialOffer as Record<string, unknown>
+        : null;
+
+    return {
+      provider: provider.id,
+      postalCode,
+      sessionStatus: sessionResponse.status,
+      cookieNames: cookies.map((cookie) => cookie.split("=")[0]),
+      regionStatus: regionResponse.status,
+      regionId,
+      regionSellers: sellers,
+      searchStatus: searchResponse.status,
+      sample: first ? {
+        productName: first.productName ?? null,
+        itemName: item?.name ?? null,
+        ean: item?.ean ?? null,
+        price: offer?.Price ?? null,
+        sellerName: seller?.sellerName ?? null,
+        availableQuantity: offer?.AvailableQuantity ?? null,
+      } : null,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    return {
+      provider: provider.id,
+      postalCode,
+      error: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -200,12 +302,20 @@ Deno.serve(async (request: Request) => {
   const atacadaoStorePages = providers.some((provider) => provider.id === "atacadao")
     ? await probeAtacadaoStorePages()
     : [];
+  const regionalization = body?.regionalization === true
+    ? await Promise.all([
+        probeRegionalization(PROVIDERS[0], "64045840", "arroz"),
+        probeRegionalization(PROVIDERS[0], "64030005", "arroz"),
+        probeRegionalization(PROVIDERS[1], "64049570", "paracetamol"),
+      ])
+    : [];
   return json({
     success: true,
     mode: "read_only_probe",
     checkedAt: new Date().toISOString(),
     results,
     atacadaoStorePages,
+    regionalization,
     note: "This diagnostic request does not create or change products, prices, stores or approvals.",
   });
 });
