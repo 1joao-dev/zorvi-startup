@@ -51,7 +51,7 @@ function unitFrom(name: string) {
 function safeUrl(value: unknown, provider: Provider) {
   if (typeof value !== "string") return null;
   try {
-    const u = new URL(value);
+    const u = new URL(value, provider.base);
     return u.protocol === "https:" && (u.hostname === provider.domain || u.hostname.endsWith("." + provider.domain)) ? u.toString() : null;
   } catch { return null; }
 }
@@ -241,44 +241,6 @@ async function persistCatalog(catalog: Awaited<ReturnType<typeof fetchCatalog>>,
 }
 
 
-async function diagnosticProbe(provider: Provider, term: string) {
-  const region = await regionFor(provider);
-  const u = new URL(provider.base + "/api/intelligent-search/v1/product-search");
-  u.searchParams.set("query", term);
-  u.searchParams.set("regionId", region.regionId);
-  u.searchParams.set("country", "BRA");
-  u.searchParams.set("zip-code", provider.postalCode);
-  u.searchParams.set("sc", "1");
-  u.searchParams.set("count", "5");
-  u.searchParams.set("page", "1");
-  const response = await fetch(u, { headers: { Accept: "application/json", "User-Agent": "ZORVI/1.0" }, signal: AbortSignal.timeout(20000) });
-  const payload = await response.json() as { products?: Array<Record<string, unknown>> };
-  const p = payload.products?.[0] || null;
-  const item = Array.isArray(p?.items) ? (p!.items as Array<Record<string, unknown>>)[0] : null;
-  const sellers = Array.isArray(item?.sellers) ? item!.sellers as Array<Record<string, unknown>> : [];
-  return {
-    status: response.status,
-    provider: provider.id,
-    regionId: region.regionId,
-    productKeys: p ? Object.keys(p) : [],
-    productId: p?.productId ?? null,
-    productName: p?.productName ?? null,
-    link: p?.link ?? p?.productLink ?? null,
-    itemKeys: item ? Object.keys(item) : [],
-    itemId: item?.itemId ?? null,
-    itemSkuId: item?.id ?? item?.skuId ?? null,
-    ean: item?.ean ?? null,
-    itemName: item?.name ?? null,
-    sellerSamples: sellers.slice(0, 5).map((s) => ({
-      keys: Object.keys(s),
-      sellerId: s.sellerId ?? null,
-      sellerName: s.sellerName ?? null,
-      offerKeys: s.commertialOffer && typeof s.commertialOffer === "object" ? Object.keys(s.commertialOffer as object) : [],
-      price: (s.commertialOffer as Record<string, unknown> | undefined)?.Price ?? null,
-    })),
-  };
-}
-
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -286,11 +248,6 @@ Deno.serve(async (request: Request) => {
   const body = await request.json().catch(() => ({}));
   const source = String(body?.source || "all");
   const action = String(body?.action || "sync");
-  if (action === "probe") {
-    const provider = providers.find((p) => p.id === source);
-    if (!provider) return json({ error: "Fonte inválida para probe." }, 400);
-    return json({ success: true, probe: await diagnosticProbe(provider, String(body?.term || (provider.id === "atacadao" ? "arroz" : "paracetamol"))) });
-  }
   if (!["all", "atacadao", "pague_menos"].includes(source)) return json({ error: "Fonte inválida." }, 400);
   if (!["sync", "preview"].includes(action)) return json({ error: "Ação inválida." }, 400);
   const selected = providers.filter((p) => source === "all" || p.id === source);
