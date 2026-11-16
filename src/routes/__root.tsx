@@ -81,6 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "theme-color", content: "#080610" },
       { title: "ZORVI — Tudo se conecta. Tudo se descobre." },
       { name: "description", content: "Descubra lugares, pessoas, produtos e experiências com a ZORVI." },
       { name: "author", content: "ZORVI" },
