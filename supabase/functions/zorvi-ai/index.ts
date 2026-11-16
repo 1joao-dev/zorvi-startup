@@ -65,7 +65,9 @@ type ChatResult = {
   variant: string | null;
   unit: string | null;
   storeName: string;
+  storeAddress: string;
   storeCity: string;
+  storeState: string;
   price: number;
   currency: string;
   priceType: string;
@@ -230,7 +232,9 @@ function mapChatResults(
         variant: (row.products as ProductRow).variant,
         unit: (row.products as ProductRow).unit,
         storeName: store.name,
+        storeAddress: store.address,
         storeCity: store.city,
+        storeState: store.state,
         price: Number(row.price),
         currency: row.currency || "BRL",
         priceType: row.price_type,
@@ -513,7 +517,9 @@ Deno.serve(async (request: Request) => {
       variant: result.variant,
       unit: result.unit,
       store_name: result.storeName,
+      store_address: result.storeAddress,
       city: result.storeCity,
+      state: result.storeState,
       price: result.price,
       currency: result.currency,
       price_type: result.priceType,
