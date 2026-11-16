@@ -103,6 +103,11 @@ async function probe(provider: Provider) {
         price: offer?.Price ?? null,
         listPrice: offer?.ListPrice ?? null,
         availableQuantity: offer?.AvailableQuantity ?? null,
+        sellerId: sellers[0]?.sellerId ?? null,
+        sellerName: sellers[0]?.sellerName ?? null,
+        sellerDefault: sellers[0]?.sellerDefault ?? null,
+        itemReferenceId: firstItem?.referenceId ?? null,
+        productCategories: first.categories ?? null,
       } : null,
       responsePreview: products.length === 0 ? body.slice(0, 300) : undefined,
     };
@@ -115,6 +120,52 @@ async function probe(provider: Provider) {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+
+async function probeAtacadaoStorePages() {
+  const pages = [
+    { slug: "teresina-bela-vista", store: "Atacadão Bela Vista" },
+    { slug: "teresina-ladeira-do-uruguai", store: "Atacadão Ladeira do Uruguai" },
+    { slug: "teresina-primavera", store: "Atacadão Primavera" },
+  ];
+  const results = [];
+  for (const entry of pages) {
+    const url = "https://www.atacadao.com.br/loja/" + entry.slug;
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "ZORVI/1.0 (+https://github.com/joaosystemss/startup-em-movimento)",
+          "Accept": "text/html,application/xhtml+xml",
+        },
+        signal: AbortSignal.timeout(20000),
+      });
+      const html = await response.text();
+      const priceMatches = [...html.matchAll(/R\\$\\s*[0-9.]+,[0-9]{2}/g)].slice(0, 8).map((match) => match[0]);
+      const productNameMatches = [...html.matchAll(/(?:productName|name)\\s*[:=]\\s*["']([^"']{3,100})["']/g)]
+        .slice(0, 5).map((match) => match[1]);
+      results.push({
+        store: entry.store,
+        status: response.status,
+        ok: response.ok,
+        htmlLength: html.length,
+        mentionsTeresina: /teresina/i.test(html),
+        containsCatalogData: /productName|productId|commertialOffer|Catalogo completo/i.test(html),
+        visiblePriceSamples: priceMatches,
+        productNameSamples: productNameMatches,
+        elapsedMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      results.push({
+        store: entry.store,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+  }
+  return results;
 }
 
 Deno.serve(async (request: Request) => {
@@ -130,11 +181,15 @@ Deno.serve(async (request: Request) => {
   if (!providers.length) return json({ error: "Invalid source. Use probe, all, atacadao or pague_menos." }, 400);
 
   const results = await Promise.all(providers.map(probe));
+  const atacadaoStorePages = providers.some((provider) => provider.id === "atacadao")
+    ? await probeAtacadaoStorePages()
+    : [];
   return json({
     success: true,
     mode: "read_only_probe",
     checkedAt: new Date().toISOString(),
     results,
+    atacadaoStorePages,
     note: "This diagnostic request does not create or change products, prices, stores or approvals.",
   });
 });
