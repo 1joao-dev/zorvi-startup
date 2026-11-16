@@ -13,6 +13,7 @@ type FeedComment = { id: string; content: string; created_at: string; user_id: s
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null };
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
+type CatalogProduct = { id:string; name:string; normalized_name:string; brand:string|null; variant:string|null; unit:string|null; category:string };
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
 type ChatPriceResult = { id:string; productName:string; brand:string|null; variant:string|null; unit:string|null; storeName:string; storeAddress:string; storeCity:string; storeState:string; price:number; currency:string; priceType:string; sourceLabel:string; sourceUrl:string|null; observedAt:string; availabilityStatus:"available"|"unknown"; distanceKm:number|null };
 type ChatMessage = { role:"assistant"|"user"; text:string; results?:ChatPriceResult[] };
@@ -445,6 +446,14 @@ function App() {
   const [stores, setStores] = useState<Store[]>([]);
   const [storeError, setStoreError] = useState("");
   const [priceResults, setPriceResults] = useState<PriceResult[]>([]);
+  const [searchCandidates, setSearchCandidates] = useState<CatalogProduct[]>([]);
+  const [selectedPriceProduct, setSelectedPriceProduct] = useState<CatalogProduct|null>(null);
+  const [priceReportOpen, setPriceReportOpen] = useState(false);
+  const [priceReportStoreId, setPriceReportStoreId] = useState("");
+  const [priceReportValue, setPriceReportValue] = useState("");
+  const [priceReportSourceUrl, setPriceReportSourceUrl] = useState("");
+  const [priceReportAvailability, setPriceReportAvailability] = useState<"available"|"unavailable"|"unknown">("unknown");
+  const [priceReportSubmitting, setPriceReportSubmitting] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [geocodingStores, setGeocodingStores] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(false);
@@ -943,62 +952,103 @@ mapPrice: result ? Number(result.price) : null,
     void geocodeStores(true);
   }, [tab, catalogLoading, stores, geocodingStores, geocodeStores]);
 
+  const loadPricesForProduct = async (product: CatalogProduct) => {
+    if (!supabase) throw new Error("Supabase não está configurado.");
+    setSelectedPriceProduct(product);
+    setSearchCandidates([]);
+    setSearchProductCategory(product.category);
+    if (product.category) setFilter(product.category);
+
+    const { data, error } = await supabase
+      .from("price_observations")
+      .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_match_status,google_checked_at,google_verified_at),products(id,name,brand,variant,unit,category)")
+      .eq("product_id", product.id)
+      .eq("verification_status", "verified")
+      .gte("observed_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      .neq("availability_status", "unavailable")
+      .order("price", { ascending: true })
+      .limit(100);
+    if (error) throw error;
+
+    type PriceJoin = Omit<PriceResult, "store" | "product"> & {
+      stores: Store | null;
+      products: PriceResult["product"] | null;
+    };
+    const joinedRows = ((data || []) as unknown as PriceJoin[]).map(
+      ({ stores: store, products: joinedProduct, ...price }) => ({ ...price, store, product: joinedProduct })
+    );
+    const verifiedRows = joinedRows.filter(
+      (row): row is PriceResult =>
+        Boolean(row.store && row.product)
+        && row.store.category === product.category
+        && (!selectedCity || storeMatchesRegion(row.store, selectedCity, selectedState))
+        && (!userLocation || row.store!.latitude === null || row.store!.longitude === null || distanceKm(
+          userLocation.lat,
+          userLocation.lon,
+          row.store!.latitude,
+          row.store!.longitude
+        ) <= 20 || userLocation.precision === "city")
+    );
+    verifiedRows.sort((a, b) => Number(a.price) - Number(b.price));
+    setPriceResults(verifiedRows);
+  };
+
+  const choosePriceProduct = async (product: CatalogProduct) => {
+    setCatalogLoading(true);
+    try {
+      await loadPricesForProduct(product);
+    } catch (error) {
+      setPriceResults([]);
+      notify(error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message || "")
+        : "Erro ao consultar preços deste produto.");
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
   const searchPrices = async () => {
     if (!supabase || !query.trim()) return;
     setCatalogLoading(true);
     setSearchPerformed(true);
+    setPriceResults([]);
+    setSearchCandidates([]);
+    setSelectedPriceProduct(null);
+    setSearchProductCategory(null);
     try {
-      const { data: products, error } = await supabase
-        .rpc("search_product_catalog", {
+      const barcode = query.trim().replace(/\D/g, "");
+      const isBarcode = /^\d{8,14}$/.test(barcode);
+      const { data, error } = isBarcode
+        ? await supabase.from("products")
+          .select("id,name,normalized_name,brand,variant,unit,category")
+          .eq("barcode", barcode)
+          .eq("is_active", true)
+          .limit(10)
+        : await supabase.rpc("search_product_catalog", {
           search_query: query.trim(),
-          result_limit: 1,
+          result_limit: 12,
         });
       if (error) throw error;
 
-      // Keep one exact presentation per comparison; never mix different sizes or brands in one price ranking.
-      const productIds = products?.[0]?.id ? [products[0].id] : [];
-      setSearchProductCategory(products?.[0]?.category || null);
-      if (products?.[0]?.category) setFilter(products[0].category);
-      if (!productIds.length) {
-        setPriceResults([]);
+      const uniqueProducts = [...new Map(((data || []) as CatalogProduct[]).map((product) => [product.id, product])).values()];
+      if (!uniqueProducts.length) {
         setSearchProductCategory(null);
+        notify("Não encontrei esse produto no catálogo. Tente informar marca, tamanho, quantidade ou código de barras.");
         return;
       }
 
-      const { data, error: priceError } = await supabase
-        .from("price_observations")
-        .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_match_status,google_checked_at,google_verified_at),products(id,name,brand,variant,unit,category)")
-        .in("product_id", productIds)
-        .eq("verification_status", "verified")
-        .gte("observed_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .neq("availability_status", "unavailable")
-        .order("price", { ascending: true })
-        .limit(100);
-      if (priceError) throw priceError;
+      if (uniqueProducts.length === 1) {
+        await loadPricesForProduct(uniqueProducts[0]);
+        return;
+      }
 
-      type PriceJoin = Omit<PriceResult, "store" | "product"> & {
-        stores: Store | null;
-        products: PriceResult["product"] | null;
-      };
-      const joinedRows = ((data || []) as unknown as PriceJoin[]).map(
-        ({ stores: store, products: product, ...price }) => ({ ...price, store, product })
-      );
-      const verifiedRows = joinedRows.filter(
-        (row): row is PriceResult =>
-          Boolean(row.store && row.product)
-          && (!products?.[0]?.category || row.store.category === products[0].category)
-          && (!selectedCity || storeMatchesRegion(row.store, selectedCity, selectedState))
-          && (!userLocation || row.store!.latitude === null || row.store!.longitude === null || distanceKm(
-            userLocation.lat,
-            userLocation.lon,
-            row.store!.latitude,
-            row.store!.longitude
-          ) <= 20 || userLocation.precision === "city")
-      );
-      verifiedRows.sort((a, b) => Number(a.price) - Number(b.price));
-      setPriceResults(verifiedRows);
+      setSearchCandidates(uniqueProducts.slice(0, 10));
+      setSearchProductCategory(null);
+      setPriceResults([]);
     } catch (error) {
       setPriceResults([]);
+      setSearchCandidates([]);
+      setSelectedPriceProduct(null);
       notify(
         error && typeof error === "object" && "message" in error
           ? String((error as { message?: unknown }).message || "")
@@ -1006,6 +1056,76 @@ mapPrice: result ? Number(result.price) : null,
       );
     } finally {
       setCatalogLoading(false);
+    }
+  };
+
+  const openPriceReport = (storeId?: string) => {
+    if (!session?.user.id) {
+      notify("Entre na sua conta para informar um preço.");
+      return;
+    }
+    if (!selectedPriceProduct) {
+      notify("Pesquise e selecione um produto primeiro.");
+      return;
+    }
+    const availableStores = mapStores.length ? mapStores : nearbyStores;
+    if (!availableStores.length) {
+      notify("Não há estabelecimentos cadastrados nesta região.");
+      return;
+    }
+    setPriceReportStoreId(storeId || selectedMapStore?.id || availableStores[0].id);
+    setPriceReportValue("");
+    setPriceReportSourceUrl("");
+    setPriceReportAvailability("unknown");
+    setPriceReportOpen(true);
+  };
+
+  const submitPriceReport = async () => {
+    if (!supabase || !session?.user.id || !selectedPriceProduct) {
+      notify("Sua sessão expirou. Entre novamente para enviar o preço.");
+      return;
+    }
+    const numericPrice = Number(priceReportValue.trim().replace(",", "."));
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      notify("Informe um preço válido, maior que zero.");
+      return;
+    }
+    if (!priceReportStoreId) {
+      notify("Selecione o estabelecimento.");
+      return;
+    }
+    const sourceUrl = priceReportSourceUrl.trim();
+    if (sourceUrl && !/^https?:\/\/\S+$/i.test(sourceUrl)) {
+      notify("O link precisa começar com http:// ou https://.");
+      return;
+    }
+
+    setPriceReportSubmitting(true);
+    try {
+      const { error } = await supabase.from("price_observations").insert({
+        product_id: selectedPriceProduct.id,
+        store_id: priceReportStoreId,
+        price: numericPrice,
+        currency: "BRL",
+        price_type: "community_report",
+        source_url: sourceUrl || null,
+        source_label: sourceUrl
+          ? "Relato da comunidade com link de apoio · aguardando validação"
+          : "Relato da comunidade · aguardando validação",
+        availability_status: priceReportAvailability,
+        verification_status: "pending",
+        confidence_score: 0.5,
+        submitted_by: session.user.id,
+      });
+      if (error) throw error;
+      setPriceReportOpen(false);
+      notify("Preço enviado para validação. Ele não aparecerá como confirmado antes da revisão.");
+    } catch (error) {
+      notify(error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message || "")
+        : "Não foi possível enviar o preço agora.");
+    } finally {
+      setPriceReportSubmitting(false);
     }
   };
 
@@ -1368,11 +1488,19 @@ mapPrice: result ? Number(result.price) : null,
             </div>}
           </section>
 
-          {searchPerformed&&<div className="price-results map-price-results">
-            <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} ofertas válidas</h2></div></div>
-            {priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}
-            {priceResults.length===0&&<p className="empty-state">Nenhum preço verificado disponível. Não exibiremos valores sem fonte confiável.</p>}
+          {searchPerformed&&searchCandidates.length>0&&<div className="price-results map-product-candidates">
+            <div className="nearby-head"><div><p className="eyebrow">CONFIRME O PRODUTO</p><h2>Encontramos {searchCandidates.length} opções</h2><small>Escolha a marca e a apresentação exatas para não comparar produtos diferentes.</small></div></div>
+            {searchCandidates.map(product=><button type="button" className="map-product-candidate" key={product.id} onClick={()=>void choosePriceProduct(product)}>
+              <span><b>{product.name}</b><small>{[product.brand,product.variant,product.unit].filter(Boolean).join(" · ") || product.category}</small></span>
+              <ArrowRight size={16}/>
+            </button>)}
           </div>}
+          {searchPerformed&&selectedPriceProduct&&<div className="price-results map-price-results">
+            <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} ofertas válidas</h2><small>{selectedPriceProduct.name}{selectedPriceProduct.variant?" · "+selectedPriceProduct.variant:""}</small></div><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Informar preço</button></div>
+            {priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : r.price_type === "community_report" ? "relato comunitário validado" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}
+            {priceResults.length===0&&<div className="price-report-empty"><p>Nenhum preço verificado disponível para este produto nos estabelecimentos da região.</p><small>Você pode enviar um preço observado. Ele ficará pendente até ser revisado.</small><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Contribuir com um preço</button></div>}
+          </div>}
+          {searchPerformed&&!selectedPriceProduct&&searchCandidates.length===0&&!catalogLoading&&<div className="price-results map-price-results"><p className="empty-state">Produto não encontrado no catálogo. Tente usar o nome completo, a marca, a apresentação ou o código de barras.</p></div>}
           <p className="demo-note map-demo-note">Preços só aparecem quando existe uma fonte verificável. Ainda não há integração automática com todos os sites de farmácias.</p>
         </section>}
         {tab === "ai" && <section className="screen ai-screen">
@@ -1407,6 +1535,32 @@ mapPrice: result ? Number(result.price) : null,
     </div></div>}
     {postToDelete && <div className="modal-backdrop" onClick={() => deletingPostId !== postToDelete.id && setPostToDelete(null)}><div className="composer-modal delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-post-title" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2 id="delete-post-title">Excluir publicação?</h2><button className="icon-button" onClick={() => setPostToDelete(null)} disabled={deletingPostId === postToDelete.id} aria-label="Fechar"><X size={19}/></button></div><p>Essa ação não pode ser desfeita. As curtidas e os comentários desta publicação também serão removidos.</p><div className="delete-confirm-actions"><button type="button" className="cancel-delete-button" onClick={() => setPostToDelete(null)} disabled={deletingPostId === postToDelete.id}>Cancelar</button><button type="button" className="danger-delete-button" onClick={() => void deletePost()} disabled={deletingPostId === postToDelete.id}>{deletingPostId === postToDelete.id ? "Excluindo..." : "Excluir publicação"} <Trash2 size={15}/></button></div></div></div>}
     {commentsPost && <div className="modal-backdrop" onClick={() => setCommentsPost(null)}><div className="composer-modal comments-modal" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>Comentários</h2><button className="icon-button" onClick={() => setCommentsPost(null)}><X size={19}/></button></div><div className="comments-list">{commentsLoading ? <p>Carregando comentários...</p> : comments.length ? comments.map((comment) => <div className="comment-item" key={comment.id}><b>{comment.author?.display_name || "Explorador ZORVI"}</b><p>{comment.content}</p><small>{new Date(comment.created_at).toLocaleString("pt-BR")}</small></div>) : <p className="comments-empty">Seja a primeira pessoa a comentar.</p>}</div><form className="comment-form" onSubmit={(e) => {e.preventDefault();void sendComment();}}><input value={commentText} onChange={(e) => setCommentText(e.target.value)} maxLength={1000} placeholder="Escreva um comentário..."/><button className="primary-button" disabled={commentSending || !commentText.trim()}><Send size={16}/></button></form></div></div>}
+    {priceReportOpen && <div className="modal-backdrop" onClick={() => !priceReportSubmitting && setPriceReportOpen(false)}>
+      <div className="composer-modal feed-composer price-report-modal" role="dialog" aria-modal="true" aria-labelledby="price-report-title" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-head"><h2 id="price-report-title">Informar preço</h2><button className="icon-button" onClick={() => setPriceReportOpen(false)} disabled={priceReportSubmitting} aria-label="Fechar"><X size={19}/></button></div>
+        <div className="price-report-product"><small>PRODUTO SELECIONADO</small><b>{selectedPriceProduct?.name}</b><span>{[selectedPriceProduct?.brand,selectedPriceProduct?.variant,selectedPriceProduct?.unit].filter(Boolean).join(" · ")}</span></div>
+        <label className="profile-form-label">Estabelecimento
+          <select value={priceReportStoreId} onChange={(event) => setPriceReportStoreId(event.target.value)}>
+            {(mapStores.length ? mapStores : nearbyStores).map((store) => <option key={store.id} value={store.id}>{store.brand_name || store.name} · {store.address}</option>)}
+          </select>
+        </label>
+        <label className="profile-form-label">Preço observado (R$)
+          <input type="number" min="0.01" step="0.01" inputMode="decimal" value={priceReportValue} onChange={(event) => setPriceReportValue(event.target.value)} placeholder="Ex.: 12,99"/>
+        </label>
+        <label className="profile-form-label">Disponibilidade na loja
+          <select value={priceReportAvailability} onChange={(event) => setPriceReportAvailability(event.target.value as "available"|"unavailable"|"unknown")}>
+            <option value="unknown">Não sei / não confirmei</option>
+            <option value="available">Estava disponível</option>
+            <option value="unavailable">Estava sem estoque</option>
+          </select>
+        </label>
+        <label className="profile-form-label">Link da oferta ou página oficial (opcional)
+          <input type="url" value={priceReportSourceUrl} onChange={(event) => setPriceReportSourceUrl(event.target.value)} placeholder="https://..."/>
+        </label>
+        <p className="price-report-note">Seu envio ficará pendente de validação. Só será mostrado como preço confirmado depois de uma revisão.</p>
+        <button type="button" className="primary-button profile-save-button" disabled={priceReportSubmitting || !priceReportValue.trim() || !priceReportStoreId} onClick={() => void submitPriceReport()}>{priceReportSubmitting ? "Enviando..." : "Enviar para validação"} <ArrowRight size={16}/></button>
+      </div>
+    </div>}
     {showSplash && <div className="zorvi-splash" aria-label="ZORVI"><img src="/zorvi-mark.webp" alt="" /><div className="splash-word">ZORVI</div><p>Tudo se conecta. Tudo se descobre.</p><span className="splash-loader" /></div>}
     {toast && <div className="toast"><Check size={16}/>{toast}</div>}
   </div>;
