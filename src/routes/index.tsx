@@ -949,10 +949,10 @@ mapPrice: result ? Number(result.price) : null,
     setSearchPerformed(true);
     try {
       const { data: products, error } = await supabase
-        .from("products")
-        .select("id,name,brand,variant,unit,category")
-        .ilike("normalized_name", "%" + query.trim() + "%")
-        .limit(20);
+        .rpc("search_product_catalog", {
+          search_query: query.trim(),
+          result_limit: 30,
+        });
       if (error) throw error;
 
       const productIds = (products || []).map((product) => product.id);
