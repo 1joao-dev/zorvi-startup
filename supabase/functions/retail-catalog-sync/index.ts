@@ -96,6 +96,9 @@ async function probe(provider: Provider, term: string) {
           price: offer?.Price ?? null,
           listPrice: offer?.ListPrice ?? null,
           availableQuantity: offer?.AvailableQuantity ?? null,
+          priceTags: offer?.PriceTags ?? null,
+          priceDefinition: offer?.PriceDefinition ?? null,
+          offerFields: offer ? Object.keys(offer) : [],
         };
       });
       return {
