@@ -862,7 +862,7 @@ Deno.serve(async (request: Request) => {
   let catalogSummary = summaryResult.data as { total_count?: number; category_counts?: Record<string, number> } | null;
   let catalogTotalCount = Number(catalogSummary?.total_count || 0);
   const stores = ((storesResult.data || []) as StoreRow[]).filter((store) =>
-    storeMatchesRegion(store, location)
+    store.coordinate_source !== "online_catalog" && storeMatchesRegion(store, location)
   );
   let productMatch = findMatchingProducts(productSearchQuestion, products, productAliases);
   const normalizedSearchQuestion = normalize(lastMessage.content);
