@@ -1442,3 +1442,66 @@ body,
 .theme-light .price-review-card{background:#fff}
 @media(min-width:420px){.price-review-meta{grid-template-columns:1fr 1fr}}
 
+
+
+/* ZORVI comparison summary and price history */
+.comparison-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;border:1px solid #8c45dc55;border-radius:16px;background:linear-gradient(135deg,#28134a,#171025);margin:14px 0 8px}
+.theme-light .comparison-summary{background:linear-gradient(135deg,#f1e7ff,#f9f3ff);border-color:#b58be855}
+.comparison-summary-main,.comparison-summary-savings{display:flex;flex-direction:column;gap:4px;min-width:0}
+.comparison-summary-main small,.comparison-summary-savings small{font-size:8px;letter-spacing:.8px;font-weight:800;color:#c4a1ff}
+.comparison-summary-main strong{font:700 23px "Space Grotesk",sans-serif;color:#a9e6b4}
+.comparison-summary-savings strong{font:700 21px "Space Grotesk",sans-serif;color:#e6c7ff}
+.comparison-summary-main span,.comparison-summary-savings span{font-size:9px;line-height:1.4;color:var(--muted)}
+.comparison-summary>p{grid-column:1/-1;margin:0;padding-top:9px;border-top:1px solid #ffffff18;color:var(--muted);font-size:9px;line-height:1.45}
+.price-result-row.is-stale{opacity:.68}
+.price-result-row.is-stale strong{color:var(--muted)}
+.price-history{margin-top:13px;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
+.price-history-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px;border:0;background:none;text-align:left;color:var(--text)}
+.price-history-toggle span{display:flex;flex-direction:column;gap:4px}
+.price-history-toggle small{font-size:8px;letter-spacing:1px;color:#b78aff;font-weight:800}
+.price-history-toggle b{font-size:11px}
+.price-history-toggle em{font-size:9px;color:var(--muted);font-style:normal}
+.price-history-toggle>svg{color:#b78aff;transition:transform .2s}
+.price-history-toggle>svg.expanded{transform:rotate(90deg)}
+.price-history-list{padding:0 13px 8px}
+.price-history-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.price-history-row span{display:flex;flex-direction:column;gap:3px}
+.price-history-row b{font-size:10px}
+.price-history-row small{font-size:8px;color:var(--muted)}
+.price-history-row strong{font-size:11px;color:var(--text);white-space:nowrap}
+
+/* Discord-inspired profile customization */
+.profile-hero{position:relative;isolation:isolate;padding-top:0}
+.profile-banner{height:116px;width:100%;border-radius:17px;background:radial-gradient(circle at 25% 15%,#8b5cf6 0%,transparent 45%),linear-gradient(120deg,#160c2d,#4c1d95 58%,#9d174d);background-size:cover;background-position:center;margin-bottom:-43px;position:relative;z-index:-1;overflow:hidden}
+.profile-banner:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent,#08061055)}
+.profile-avatar-main{z-index:2;border:4px solid var(--bg);width:88px;height:88px;border-radius:30px;margin:0 auto 12px}
+.profile-avatar .avatar-fallback{position:absolute;inset:0;display:grid;place-items:center;z-index:0}
+.profile-avatar-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1}
+.profile-avatar-decoration{position:absolute;inset:-11%;width:122%;height:122%;object-fit:contain;z-index:2;pointer-events:none}
+.avatar-top{position:relative;overflow:hidden}
+.avatar-top .avatar-fallback{position:absolute;inset:0;display:grid;place-items:center;z-index:0}
+.avatar-top img{position:absolute;inset:0;width:100%;height:100%;z-index:1}
+.profile-badges{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:8px 0 7px}
+.profile-badge-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 8px 4px 5px;border:1px solid #a78bfa55;border-radius:20px;background:#8b5cf61a;color:var(--text);font-size:8px;font-weight:700}
+.profile-badge-pill img{width:17px;height:17px;object-fit:contain}
+.profile-member-since{display:block;color:var(--muted);font-size:9px;margin:6px 0 12px}
+.profile-asset-picker{display:flex;flex-direction:column;gap:11px;padding-top:4px}
+.profile-asset-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:4px;background:var(--surface2);border:1px solid var(--line);border-radius:13px}
+.profile-asset-tabs button{border:0;border-radius:9px;background:transparent;color:var(--muted);font-size:8px;font-weight:700;padding:9px 3px}
+.profile-asset-tabs button.active{background:#7829d7;color:#fff;box-shadow:0 3px 12px #7829d755}
+.profile-asset-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.profile-asset-option{min-width:0;min-height:105px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:9px 5px;border:1px solid var(--line);border-radius:13px;background:var(--surface2);color:var(--text);text-align:center}
+.profile-asset-option.selected{border-color:#b57aff;background:#7829d722;box-shadow:0 0 0 2px #9b35ff20}
+.profile-asset-option:disabled{opacity:.42;filter:grayscale(.8)}
+.profile-asset-option>img{width:54px;height:54px;object-fit:contain}
+.profile-asset-option b{font-size:9px;line-height:1.2}
+.profile-asset-option small{font-size:8px;color:var(--muted)}
+.profile-asset-none>span{width:54px;height:54px;display:grid;place-items:center;border:1px dashed var(--line);border-radius:13px;color:var(--muted);font-size:24px}
+.decoration-preview{width:54px;height:54px;position:relative;display:grid;place-items:center}
+.decoration-preview img:first-child{width:46px;height:46px;border-radius:14px}
+.decoration-preview img:last-child{position:absolute;inset:-5px;width:64px;height:64px;object-fit:contain}
+.banner-asset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.profile-asset-option .profile-banner-option{width:100%;height:54px;object-fit:cover;border-radius:8px}
+.badge-asset-grid .profile-asset-option>img{width:50px;height:50px}
+.profile-gallery-note{font-size:8px;line-height:1.45;color:var(--muted);text-align:center;margin:0 5px 2px}
+@media(max-width:370px){.profile-asset-tabs button{font-size:7px}.profile-asset-grid{gap:6px}.profile-asset-option{padding:8px 3px}}

@@ -8,14 +8,18 @@ import { PriceReviewPanel } from "@/components/PriceReviewPanel";
 import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin, LocateFixed, MessageCircle, Moon, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Send, Settings2, Share2, ShoppingBag, Sparkles, Sun, Trash2, UserRound, Utensils, Wallet, X, Zap } from "lucide-react";
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
-type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null };
+type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null; created_at: string };
+type ProfileAsset = { id:string; slug:string; name:string; asset_type:"avatar"|"avatar_decoration"|"banner"|"badge"; asset_url:string; rarity:string; description:string; is_free:boolean; sort_order:number };
+type EquippedProfile = { user_id:string; avatar_asset_id:string|null; decoration_asset_id:string|null; banner_asset_id:string|null };
+type ProfileBadge = { asset_id:string; is_featured:boolean; unlocked_at:string };
+type PriceHistoryResult = { id:string; product_id:string; store_id:string; price:number; price_type:string; source_label:string; observed_at:string; store_name:string; store_city:string; store_state:string; is_online:boolean };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null };
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type CatalogProduct = { id:string; name:string; normalized_name:string; brand:string|null; variant:string|null; unit:string|null; category:string };
-type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
+type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; is_online:boolean; is_stale:boolean; age_hours:number; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
 type ChatPriceResult = { id:string; productName:string; brand:string|null; variant:string|null; unit:string|null; storeName:string; storeAddress:string; storeCity:string; storeState:string; isOnline:boolean; price:number; currency:string; priceType:string; sourceLabel:string; sourceUrl:string|null; observedAt:string; availabilityStatus:"available"|"unknown"; distanceKm:number|null };
 type ChatMessage = { role:"assistant"|"user"; text:string; results?:ChatPriceResult[] };
 type LeafletMap = { setView(center:[number,number],zoom:number):LeafletMap; fitBounds(bounds:Array<[number,number]>,options?:Record<string,unknown>):LeafletMap; on(event:string,handler:(event:{latlng:{lat:number;lng:number}})=>void):LeafletMap; remove():void; invalidateSize():void };
@@ -332,6 +336,14 @@ function App() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
+  const [profileAssets, setProfileAssets] = useState<ProfileAsset[]>([]);
+  const [profileInventoryIds, setProfileInventoryIds] = useState<string[]>([]);
+  const [equippedProfile, setEquippedProfile] = useState<EquippedProfile|null>(null);
+  const [profileBadges, setProfileBadges] = useState<ProfileBadge[]>([]);
+  const [profileAssetTab, setProfileAssetTab] = useState<"avatar"|"decoration"|"banner"|"badge">("avatar");
+  const [selectedAvatarAssetId, setSelectedAvatarAssetId] = useState<string|null>(null);
+  const [selectedDecorationAssetId, setSelectedDecorationAssetId] = useState<string|null>(null);
+  const [selectedBannerAssetId, setSelectedBannerAssetId] = useState<string|null>(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [showSplash, setShowSplash] = useState(true);
   useEffect(() => { const splashTimer = window.setTimeout(() => setShowSplash(false), 1500); return () => window.clearTimeout(splashTimer); }, []);
@@ -344,17 +356,40 @@ function App() {
   }, []);
   const accountName = String(profile?.display_name || session?.user.user_metadata?.display_name || session?.user.email?.split("@")[0] || "Explorador");
   const accountInitial = accountName.trim().charAt(0).toUpperCase() || "Z";
+  const equippedAvatarAsset = profileAssets.find((asset) => asset.id === equippedProfile?.avatar_asset_id) || null;
+  const equippedDecorationAsset = profileAssets.find((asset) => asset.id === equippedProfile?.decoration_asset_id) || null;
+  const equippedBannerAsset = profileAssets.find((asset) => asset.id === equippedProfile?.banner_asset_id) || null;
+  const selectedAvatarAsset = profileAssets.find((asset) => asset.id === selectedAvatarAssetId) || null;
+  const selectedDecorationAsset = profileAssets.find((asset) => asset.id === selectedDecorationAssetId) || null;
+  const currentAvatarUrl = profile?.avatar_url || equippedAvatarAsset?.asset_url || "";
+  const featuredBadges = profileBadges.filter((badge) => badge.is_featured).map((badge) => profileAssets.find((asset) => asset.id === badge.asset_id)).filter((asset): asset is ProfileAsset => Boolean(asset));
   useEffect(() => {
-    if (!session?.user.id || !supabase) { setProfile(null); return; }
+    if (!session?.user.id || !supabase) {
+      setProfile(null); setProfileAssets([]); setProfileInventoryIds([]); setEquippedProfile(null); setProfileBadges([]);
+      return;
+    }
     let active = true;
     setProfileLoading(true);
-    supabase.from("profiles").select("id, username, display_name, avatar_url, bio").eq("id", session.user.id).maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) notify(error.message);
-        else if (data) setProfile(data as UserProfile);
-        setProfileLoading(false);
-      });
+    const userId = session.user.id;
+    Promise.all([
+      supabase.from("profiles").select("id, username, display_name, avatar_url, bio, created_at").eq("id", userId).maybeSingle(),
+      supabase.from("profile_assets").select("id,slug,name,asset_type,asset_url,rarity,description,is_free,sort_order").eq("is_active", true).order("sort_order", { ascending: true }),
+      supabase.from("user_profile_inventory").select("asset_id").eq("user_id", userId),
+      supabase.from("user_profile_equipped").select("user_id,avatar_asset_id,decoration_asset_id,banner_asset_id").eq("user_id", userId).maybeSingle(),
+      supabase.from("user_profile_badges").select("asset_id,is_featured,unlocked_at").eq("user_id", userId).order("unlocked_at", { ascending: true })
+    ]).then(([profileResult, assetsResult, inventoryResult, equippedResult, badgesResult]) => {
+      if (!active) return;
+      const firstError = [profileResult, assetsResult, inventoryResult, equippedResult, badgesResult].find((result) => result.error)?.error;
+      if (firstError) notify(firstError.message);
+      if (profileResult.data) setProfile(profileResult.data as UserProfile);
+      setProfileAssets((assetsResult.data || []) as ProfileAsset[]);
+      setProfileInventoryIds((inventoryResult.data || []).map((row) => row.asset_id));
+      setEquippedProfile((equippedResult.data || null) as EquippedProfile|null);
+      setProfileBadges((badgesResult.data || []) as ProfileBadge[]);
+      setProfileLoading(false);
+    }).catch((error) => {
+      if (active) { notify(error instanceof Error ? error.message : "Não foi possível carregar seu perfil."); setProfileLoading(false); }
+    });
     return () => { active = false; };
   }, [session?.user.id]);
   const openProfileEditor = () => {
@@ -363,12 +398,18 @@ function App() {
     setEditBio(profile?.bio || "");
     setAvatarFile(null);
     setAvatarPreview(profile?.avatar_url || "");
+    setSelectedAvatarAssetId(equippedProfile?.avatar_asset_id || null);
+    setSelectedDecorationAssetId(equippedProfile?.decoration_asset_id || null);
+    setSelectedBannerAssetId(equippedProfile?.banner_asset_id || null);
+    setProfileAssetTab("avatar");
     setEditProfileOpen(true);
   };
   const chooseAvatar = (file?: File) => {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { notify("Use uma imagem JPG, PNG ou WebP."); return; }
     if (file.size > 5 * 1024 * 1024) { notify("A imagem deve ter no máximo 5 MB."); return; }
+    if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
+    setSelectedAvatarAssetId(null);
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   };
@@ -388,11 +429,22 @@ function App() {
         const { error: uploadError } = await supabase.storage.from("avatars").upload(path, avatarFile, { upsert: true, contentType: avatarFile.type, cacheControl: "3600" });
         if (uploadError) throw uploadError;
         avatarUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+      } else if (selectedAvatarAssetId) {
+        avatarUrl = null;
       }
-      const update = { id: session.user.id, display_name: cleanName, username: cleanUsername, bio: editBio.trim(), avatar_url: avatarUrl, updated_at: new Date().toISOString() };
-      const { data, error } = await supabase.from("profiles").update(update).eq("id", session.user.id).select("id, username, display_name, avatar_url, bio").single();
+      const { error } = await supabase.rpc("save_profile_customization", {
+        p_display_name: cleanName,
+        p_username: cleanUsername,
+        p_bio: editBio.trim(),
+        p_avatar_url: avatarUrl,
+        p_avatar_asset_id: selectedAvatarAssetId,
+        p_decoration_asset_id: selectedDecorationAssetId,
+        p_banner_asset_id: selectedBannerAssetId
+      });
       if (error) throw error;
-      setProfile(data as UserProfile);
+      setProfile((current) => current ? { ...current, display_name: cleanName, username: cleanUsername, bio: editBio.trim(), avatar_url: avatarUrl } : current);
+      setEquippedProfile({ user_id: session.user.id, avatar_asset_id: selectedAvatarAssetId, decoration_asset_id: selectedDecorationAssetId, banner_asset_id: selectedBannerAssetId });
+      if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
       setEditProfileOpen(false);
       notify("Perfil atualizado com sucesso!");
     } catch (cause) {
@@ -409,6 +461,18 @@ function App() {
           : msg;
       notify(friendly);
     } finally { setProfileSaving(false); }
+  };
+  const toggleProfileBadge = async (assetId:string) => {
+    if (!supabase || !session?.user.id) return;
+    const badge = profileBadges.find((item) => item.asset_id === assetId);
+    if (!badge) { notify("Essa insígnia ainda está bloqueada."); return; }
+    if (!badge.is_featured && profileBadges.filter((item) => item.is_featured).length >= 3) {
+      notify("Você pode destacar até 3 insígnias no perfil.");
+      return;
+    }
+    const { error } = await supabase.from("user_profile_badges").update({ is_featured: !badge.is_featured }).eq("user_id", session.user.id).eq("asset_id", assetId);
+    if (error) { notify(error.message); return; }
+    setProfileBadges((current) => current.map((item) => item.asset_id === assetId ? { ...item, is_featured: !item.is_featured } : item));
   };
   const signOut = async () => { if (supabase) { const { error } = await supabase.auth.signOut(); if (error) notify(error.message); else notify("Você saiu da sua conta."); } };
   const [dark, setDark] = useState(true);
@@ -448,6 +512,8 @@ function App() {
   const [stores, setStores] = useState<Store[]>([]);
   const [storeError, setStoreError] = useState("");
   const [priceResults, setPriceResults] = useState<PriceResult[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryResult[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [searchCandidates, setSearchCandidates] = useState<CatalogProduct[]>([]);
   const [selectedPriceProduct, setSelectedPriceProduct] = useState<CatalogProduct|null>(null);
   const [priceReportOpen, setPriceReportOpen] = useState(false);
@@ -859,6 +925,7 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
     if (!searchPerformed) return relevantStores;
     const bestByStore = new Map<string,PriceResult>();
     priceResults.forEach(result => {
+      if (result.is_stale) return;
       const current = bestByStore.get(result.store.id);
       if (!current || Number(result.price) < Number(current.price)) bestByStore.set(result.store.id,result);
     });
@@ -879,6 +946,14 @@ mapPrice: result ? Number(result.price) : null,
     const prices = mapStores.map(store => store.mapPrice).filter((price): price is number => typeof price === "number" && Number.isFinite(price));
     return prices.length ? Math.min(...prices) : null;
   }, [mapStores]);
+  const comparisonStats = useMemo(() => {
+    const fresh = priceResults.filter((result) => !result.is_stale).sort((a, b) => Number(a.price) - Number(b.price));
+    if (!fresh.length) return { freshCount: 0, cheapest: null as PriceResult|null, highest: null as PriceResult|null, savings: 0, savingsPercent: 0 };
+    const cheapest = fresh[0];
+    const highest = fresh[fresh.length - 1];
+    const savings = Math.max(0, Number(highest.price) - Number(cheapest.price));
+    return { freshCount: fresh.length, cheapest, highest, savings, savingsPercent: Number(highest.price) > 0 ? savings / Number(highest.price) * 100 : 0 };
+  }, [priceResults]);
   const mapLocatedCount = mapStores.filter(store => store.latitude !== null && store.longitude !== null).length;
   const mapPendingCount = mapStores.length - mapLocatedCount;
   const mapGoogleVerifiedCount = mapStores.filter(store => store.google_match_status === "verified").length;
@@ -960,40 +1035,70 @@ mapPrice: result ? Number(result.price) : null,
     setSelectedPriceProduct(product);
     setSearchCandidates([]);
     setSearchProductCategory(product.category);
+    setHistoryExpanded(false);
     if (product.category) setFilter(product.category);
 
-    const { data, error } = await supabase
-      .from("price_observations")
-      .select("id,product_id,store_id,price,price_type,source_url,source_label,observed_at,availability_status,stores(id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_match_status,google_checked_at,google_verified_at),products(id,name,brand,variant,unit,category)")
-      .eq("product_id", product.id)
-      .eq("verification_status", "verified")
-      .gte("observed_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-      .neq("availability_status", "unavailable")
-      .order("price", { ascending: true })
-      .limit(100);
-    if (error) throw error;
+    const [comparisonResult, historyResult] = await Promise.all([
+      supabase.from("product_price_comparison").select("*")
+        .eq("product_id", product.id)
+        .order("is_stale", { ascending: true })
+        .order("price", { ascending: true })
+        .limit(100),
+      supabase.from("product_price_history").select("id,product_id,store_id,price,price_type,source_label,observed_at,store_name,store_city,store_state,is_online")
+        .eq("product_id", product.id)
+        .gte("observed_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+        .order("observed_at", { ascending: false })
+        .limit(100)
+    ]);
+    if (comparisonResult.error) throw comparisonResult.error;
+    if (historyResult.error) throw historyResult.error;
 
-    type PriceJoin = Omit<PriceResult, "store" | "product"> & {
-      stores: Store | null;
-      products: PriceResult["product"] | null;
-    };
-    const joinedRows = ((data || []) as unknown as PriceJoin[]).map(
-      ({ stores: store, products: joinedProduct, ...price }) => ({ ...price, store, product: joinedProduct })
+    const verifiedRows = ((comparisonResult.data || []) as Record<string, unknown>[]).map((row): PriceResult => ({
+      id: String(row.id),
+      price: Number(row.price),
+      price_type: String(row.price_type),
+      source_url: row.source_url ? String(row.source_url) : null,
+      source_label: String(row.source_label || ""),
+      observed_at: String(row.observed_at),
+      availability_status: String(row.availability_status || "unknown"),
+      is_online: Boolean(row.is_online),
+      is_stale: Boolean(row.is_stale),
+      age_hours: Number(row.age_hours || 0),
+      store: {
+        id: String(row.store_id),
+        name: String(row.store_name || ""),
+        category: String(row.store_category || ""),
+        address: String(row.store_address || ""),
+        city: String(row.store_city || ""),
+        state: String(row.store_state || ""),
+        latitude: row.store_latitude === null ? null : Number(row.store_latitude),
+        longitude: row.store_longitude === null ? null : Number(row.store_longitude),
+        website_url: row.store_website_url ? String(row.store_website_url) : null,
+        brand_name: row.store_brand_name ? String(row.store_brand_name) : null,
+        brand_slug: row.store_brand_slug ? String(row.store_brand_slug) : null,
+        brand_logo_url: row.store_brand_logo_url ? String(row.store_brand_logo_url) : null,
+        coordinate_precision: row.store_coordinate_precision ? String(row.store_coordinate_precision) : null,
+        coordinate_source: row.store_coordinate_source ? String(row.store_coordinate_source) : null,
+        geocoded_at: row.store_geocoded_at ? String(row.store_geocoded_at) : null,
+        geocode_attempted_at: row.store_geocode_attempted_at ? String(row.store_geocode_attempted_at) : null,
+        google_place_id: row.store_google_place_id ? String(row.store_google_place_id) : null,
+        google_match_status: row.store_google_match_status ? String(row.store_google_match_status) : null,
+        google_checked_at: row.store_google_checked_at ? String(row.store_google_checked_at) : null,
+        google_verified_at: row.store_google_verified_at ? String(row.store_google_verified_at) : null
+      },
+      product: { id: product.id, name: product.name, brand: product.brand, variant: product.variant, unit: product.unit, category: product.category }
+    })).filter((row) =>
+      row.store.category === product.category
+      && (!selectedCity || storeMatchesRegion(row.store, selectedCity, selectedState))
+      && (!userLocation || row.store.latitude === null || row.store.longitude === null || distanceKm(
+        userLocation.lat, userLocation.lon, row.store.latitude, row.store.longitude
+      ) <= 20 || userLocation.precision === "city")
     );
-    const verifiedRows = joinedRows.filter(
-      (row): row is PriceResult =>
-        Boolean(row.store && row.product)
-        && row.store.category === product.category
-        && (!selectedCity || storeMatchesRegion(row.store, selectedCity, selectedState))
-        && (!userLocation || row.store!.latitude === null || row.store!.longitude === null || distanceKm(
-          userLocation.lat,
-          userLocation.lon,
-          row.store!.latitude,
-          row.store!.longitude
-        ) <= 20 || userLocation.precision === "city")
-    );
-    verifiedRows.sort((a, b) => Number(a.price) - Number(b.price));
+    verifiedRows.sort((a, b) => Number(a.is_stale) - Number(b.is_stale) || Number(a.price) - Number(b.price));
+    const visibleStoreIds = new Set(verifiedRows.map((row) => row.store.id));
+    const historyRows = ((historyResult.data || []) as PriceHistoryResult[]).filter((row) => visibleStoreIds.has(row.store_id));
     setPriceResults(verifiedRows);
+    setPriceHistory(historyRows);
   };
 
   const choosePriceProduct = async (product: CatalogProduct) => {
@@ -1362,7 +1467,7 @@ mapPrice: result ? Number(result.price) : null,
       </div>
       <header className="topbar">
         <div><div className="brand"><img className="brand-mark-image" src="/zorvi-mark.webp" alt="Símbolo ZORVI" /><span>ZORVI</span></div><p className="tagline">Tudo se conecta. Tudo se descobre.</p></div>
-        <div className="top-actions"><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Alternar tema">{dark ? <Sun size={19}/> : <Moon size={19}/>}</button><button className="icon-button" onClick={() => notify("Nenhuma notificação nova")} aria-label="Notificações"><Bell size={19}/></button><button className="avatar avatar-top" onClick={() => setTab("profile")}>{profile?.avatar_url ? <img src={profile.avatar_url} alt="Sua foto de perfil"/> : accountInitial}</button></div>
+        <div className="top-actions"><button className="icon-button" onClick={() => setDark(!dark)} aria-label="Alternar tema">{dark ? <Sun size={19}/> : <Moon size={19}/>}</button><button className="icon-button" onClick={() => notify("Nenhuma notificação nova")} aria-label="Notificações"><Bell size={19}/></button><button className="avatar avatar-top" onClick={() => setTab("profile")} aria-label="Abrir perfil"><span className="avatar-fallback">{accountInitial}</span>{currentAvatarUrl && <img src={currentAvatarUrl} alt="Sua foto de perfil" onError={(event) => { event.currentTarget.style.display = "none"; }}/>}</button></div>
       </header>
       <main className="main-content">
         {tab === "home" && <section className="screen">
@@ -1390,8 +1495,8 @@ mapPrice: result ? Number(result.price) : null,
           <div className="map-search-row">
             <div className="map-search">
               <Search size={18}/>
-              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Produto, marca, tamanho ou código de barras" aria-label="Buscar produto"/>
-              {query && <button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} aria-label="Limpar busca"><X size={16}/></button>}
+              <input value={query} onChange={e=>{setQuery(e.target.value);setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setPriceHistory([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} onKeyDown={e=>{if(e.key==="Enter")void searchPrices();}} placeholder="Produto, marca, tamanho ou código de barras" aria-label="Buscar produto"/>
+              {query && <button onClick={()=>{setQuery("");setSearchPerformed(false);setSearchProductCategory(null);setPriceResults([]);setPriceHistory([]);setSearchCandidates([]);setSelectedPriceProduct(null);setSelectedMapStore(null);}} aria-label="Limpar busca"><X size={16}/></button>}
             </div>
             <button className="primary-button price-search-button" disabled={catalogLoading||!query.trim()} onClick={()=>void searchPrices()}>
               {catalogLoading ? <span className="map-button-loading"/> : <Search size={16}/>}
@@ -1509,7 +1614,16 @@ mapPrice: result ? Number(result.price) : null,
           </div>}
           {searchPerformed&&selectedPriceProduct&&<div className="price-results map-price-results">
             <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} ofertas válidas</h2><small>{selectedPriceProduct.name}{selectedPriceProduct.variant?" · "+selectedPriceProduct.variant:""}</small></div><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Informar preço</button></div>
-            {priceResults.map(r=><div className="price-result-row" key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.product.name}{r.product.variant?" · "+r.product.variant:""} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : r.price_type === "community_report" ? "relato comunitário validado" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>R$ {Number(r.price).toFixed(2).replace(".",",")}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}
+            <div className="comparison-summary">
+              <div className="comparison-summary-main"><small>MENOR PREÇO ATUALIZADO</small><strong>{comparisonStats.cheapest ? formatMapPrice(Number(comparisonStats.cheapest.price)) : "Sem preço recente"}</strong><span>{comparisonStats.cheapest ? comparisonStats.cheapest.store.name : "Nenhum preço confirmado nos últimos 7 dias"}</span></div>
+              <div className="comparison-summary-savings"><small>ECONOMIA POSSÍVEL</small><strong>{comparisonStats.freshCount > 1 ? formatMapPrice(comparisonStats.savings) : "—"}</strong><span>{comparisonStats.freshCount > 1 ? comparisonStats.savingsPercent.toFixed(2).replace(".",",") + "% comparado ao maior preço recente" : "Compare pelo menos duas lojas"}</span></div>
+              <p>{comparisonStats.freshCount} estabelecimento(s) com preço atualizado. Preços com mais de 7 dias aparecem abaixo como antigos e não definem o menor preço.</p>
+            </div>
+            {priceResults.map(r=><div className={"price-result-row" + (r.is_stale ? " is-stale" : "")} key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.is_online ? "Canal online" : "Loja física"} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : r.price_type === "community_report" ? "relato comunitário validado" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.is_stale ? "Preço antigo — confirme antes de comprar" : r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>{formatMapPrice(Number(r.price))}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}
+            {priceHistory.length > 0 && <div className="price-history">
+              <button type="button" className="price-history-toggle" onClick={() => setHistoryExpanded((open) => !open)}><span><small>HISTÓRICO DE PREÇOS</small><b>{priceHistory.length} registro(s) nos últimos 90 dias</b><em>Veja quando o preço mudou em cada estabelecimento.</em></span><ArrowRight size={17} className={historyExpanded ? "expanded" : ""}/></button>
+              {historyExpanded && <div className="price-history-list">{priceHistory.slice(0,16).map((item) => <div className="price-history-row" key={item.id}><span><b>{item.store_name}</b><small>{item.is_online ? "Online" : "Loja física"} · {new Date(item.observed_at).toLocaleString("pt-BR")}</small></span><strong>{formatMapPrice(Number(item.price))}</strong></div>)}</div>}
+            </div>}
             {priceResults.length===0&&<div className="price-report-empty"><p>Nenhum preço verificado disponível para este produto nos estabelecimentos da região.</p><small>Você pode enviar um preço observado. Ele ficará pendente até ser revisado.</small><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Contribuir com um preço</button></div>}
           </div>}
           {searchPerformed&&!selectedPriceProduct&&searchCandidates.length===0&&!catalogLoading&&<div className="price-results map-price-results"><p className="empty-state">Produto não encontrado no catálogo. Tente usar o nome completo, a marca, a apresentação ou o código de barras.</p></div>}
@@ -1524,13 +1638,66 @@ mapPrice: result ? Number(result.price) : null,
           <p className="demo-note">A ZORVI consulta o catálogo e os preços verificados. Informações sem confirmação são identificadas.</p>
         </section>}
         {tab === "search" && <section className="screen"><div className="screen-title"><div><p className="eyebrow">ENCONTRE SUA PRÓXIMA DESCOBERTA</p><h1>Explorar</h1><p>Produtos, lugares, preços e experiências.</p></div></div><div className="search-large"><Search size={20}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O que você está procurando?"/><button onClick={() => setQuery("")}><X size={16}/></button></div><p className="eyebrow category-label">CATEGORIAS POPULARES</p><div className="category-grid">{[{name:"Mercados",icon:ShoppingBag},{name:"Restaurantes",icon:Utensils},{name:"Farmácias",icon:Plus},{name:"Experiências",icon:Sparkles}].map((c) => {const Icon=c.icon;return <button className="category-card" key={c.name} onClick={() => {setFilter(c.name==="Mercados"?"Mercado":c.name==="Restaurantes"?"Restaurante":c.name==="Farmácias"?"Farmácia":"Todos");setTab("map");}}><span className="place-icon"><Icon size={21}/></span><b>{c.name}</b><ArrowRight size={15}/></button>;})}</div><div className="section-heading search-trends"><div><p className="eyebrow">EM ALTA NA COMUNIDADE</p><h2>Descobertas populares</h2></div></div>{["Cafés para conhecer","Economize nas compras","Descubra com a ZORVI AI"].map((t,i) => <button className="trend-row" key={t} onClick={() => setTab(i===2?"ai":"map")}><span className="trend-icon">{i===2?<Sparkles size={18}/>:<ShoppingBag size={18}/>}</span><span><b>{t}</b><small>Ideias para sua próxima descoberta</small></span><ArrowRight size={17}/></button>)}<p className="demo-note">Resultados e tendências são exemplos para demonstração.</p></section>}
-        {tab === "profile" && <section className="screen"><div className="profile-top"><p className="eyebrow">SEU ESPAÇO ZORVI</p><button className="icon-button" onClick={() => notify("Configurações em breve")}><Settings2 size={20}/></button></div><div className="profile-hero"><div className="profile-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt={"Foto de " + accountName}/> : accountInitial}<span className="profile-online"/></div><h1>{accountName}</h1><p>@{profile?.username || "explorador"} · {session?.user.email || "Explorador ZORVI"}</p>{profile?.bio && <p className="profile-bio">{profile.bio}</p>}<button className="edit-profile" onClick={openProfileEditor}>Editar perfil</button></div><div className="stats-row"><div><b>12</b><small>Publicações</small></div><div><b>248</b><small>Seguidores</small></div><div><b>186</b><small>Seguindo</small></div></div><div className="profile-menu"><button onClick={() => notify(saved.length + " itens salvos nesta sessão")}><Bookmark size={19}/><span><b>Itens salvos</b><small>Suas descobertas favoritas</small></span><ArrowRight size={17}/></button><button onClick={() => notify("Suas avaliações aparecerão aqui")}><Heart size={19}/><span><b>Avaliações</b><small>Compartilhe suas experiências</small></span><ArrowRight size={17}/></button><button onClick={() => setDark(!dark)}>{dark?<Sun size={19}/>:<Moon size={19}/>}<span><b>Aparência</b><small>{dark?"Tema escuro ativado":"Tema claro ativado"}</small></span><span className={"toggle-pill " + (dark?"on":"")}/></button><button onClick={() => notify("Preferências em breve")}><Settings2 size={19}/><span><b>Configurações</b><small>Privacidade e preferências</small></span><ArrowRight size={17}/></button>{session && <button onClick={signOut}><UserRound size={19}/><span><b>Sair da conta</b><small>Encerrar sua sessão com segurança</small></span><ArrowRight size={17}/></button>}</div>{session && <PriceReviewPanel />}<div className="profile-invite"><Sparkles size={19}/><div><b>Convide sua comunidade</b><small>Descobertas ficam melhores quando compartilhadas.</small></div><button onClick={() => notify("Convite copiado (demonstração)")}><Share2 size={17}/></button></div><p className="demo-note">{session ? "Conta conectada com Supabase." : "Modo demonstração. Configure o Supabase para ativar contas reais."}</p></section>}
+        {tab === "profile" && <section className="screen"><div className="profile-top"><p className="eyebrow">SEU ESPAÇO ZORVI</p><button className="icon-button" onClick={() => notify("Configurações em breve")}><Settings2 size={20}/></button></div><div className="profile-hero">
+            <div className="profile-banner" style={{ backgroundImage: equippedBannerAsset ? `url("${equippedBannerAsset.asset_url}")` : undefined }} aria-hidden="true"/>
+            <div className="profile-avatar profile-avatar-main"><span className="avatar-fallback">{accountInitial}</span>{currentAvatarUrl && <img className="profile-avatar-photo" src={currentAvatarUrl} alt={"Foto de " + accountName} onError={(event) => { event.currentTarget.style.display = "none"; }}/ >}{equippedDecorationAsset && <img className="profile-avatar-decoration" src={equippedDecorationAsset.asset_url} alt="" aria-hidden="true"/>}<span className="profile-online"/></div>
+            <h1>{accountName}</h1>
+            <p>@{profile?.username || "explorador"} · {session?.user.email || "Explorador ZORVI"}</p>
+            {profile?.bio && <p className="profile-bio">{profile.bio}</p>}
+            <div className="profile-badges">{featuredBadges.map((badge) => <span className="profile-badge-pill" key={badge.id}><img src={badge.asset_url} alt=""/>{badge.name}</span>)}</div>
+            <small className="profile-member-since">Explorador desde {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "agora"}</small>
+            <button className="edit-profile" onClick={openProfileEditor}>Personalizar perfil</button>
+          </div><div className="profile-menu"><button onClick={() => notify(saved.length + " itens salvos nesta sessão")}><Bookmark size={19}/><span><b>Itens salvos</b><small>Suas descobertas favoritas</small></span><ArrowRight size={17}/></button><button onClick={() => notify("Suas avaliações aparecerão aqui")}><Heart size={19}/><span><b>Avaliações</b><small>Compartilhe suas experiências</small></span><ArrowRight size={17}/></button><button onClick={() => setDark(!dark)}>{dark?<Sun size={19}/>:<Moon size={19}/>}<span><b>Aparência</b><small>{dark?"Tema escuro ativado":"Tema claro ativado"}</small></span><span className={"toggle-pill " + (dark?"on":"")}/></button><button onClick={() => notify("Preferências em breve")}><Settings2 size={19}/><span><b>Configurações</b><small>Privacidade e preferências</small></span><ArrowRight size={17}/></button>{session && <button onClick={signOut}><UserRound size={19}/><span><b>Sair da conta</b><small>Encerrar sua sessão com segurança</small></span><ArrowRight size={17}/></button>}</div>{session && <PriceReviewPanel />}<div className="profile-invite"><Sparkles size={19}/><div><b>Convide sua comunidade</b><small>Descobertas ficam melhores quando compartilhadas.</small></div><button onClick={() => notify("Convite copiado (demonstração)")}><Share2 size={17}/></button></div><p className="demo-note">{session ? "Conta conectada com Supabase." : "Modo demonstração. Configure o Supabase para ativar contas reais."}</p></section>}
       </main>
       <nav className="bottom-nav" aria-label="Navegação principal">{[{id:"home" as Tab,label:"Início",icon:Home},{id:"map" as Tab,label:"Mapa",icon:MapPin},{id:"ai" as Tab,label:"ZORVI AI",icon:Sparkles},{id:"search" as Tab,label:"Explorar",icon:Compass},{id:"profile" as Tab,label:"Perfil",icon:UserRound}].map((item) => {const Icon=item.icon;return <button key={item.id} className={"nav-item "+(tab===item.id?"active":"")+(item.id==="ai"?" nav-ai":"")} onClick={() => setTab(item.id)}><span><Icon size={item.id==="ai"?21:20}/></span><small>{item.label}</small></button>;})}</nav>
     </div>
     {editProfileOpen && <div className="modal-backdrop" onClick={() => !profileSaving && setEditProfileOpen(false)}><div className="composer-modal profile-edit-modal" onClick={(e) => e.stopPropagation()}>
       <div className="modal-head"><h2>Editar perfil</h2><button className="icon-button" onClick={() => setEditProfileOpen(false)} disabled={profileSaving}><X size={19}/></button></div>
-      <div className="avatar-edit-wrap"><div className="profile-avatar edit-avatar-preview">{avatarPreview ? <img src={avatarPreview} alt="Prévia da foto"/> : accountInitial}</div><label className="avatar-upload-button"><Camera size={15}/> Alterar foto<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseAvatar(e.target.files?.[0])}/></label><small>JPG, PNG ou WebP · máximo 5 MB</small></div>
+      <div className="avatar-edit-wrap">
+        <div className="profile-avatar edit-avatar-preview"><span className="avatar-fallback">{accountInitial}</span>{(avatarPreview || selectedAvatarAsset) && <img className="profile-avatar-photo" src={avatarPreview || selectedAvatarAsset?.asset_url || ""} alt="Prévia do avatar" onError={(event) => { event.currentTarget.style.display = "none"; }}/ >}{selectedDecorationAsset && <img className="profile-avatar-decoration" src={selectedDecorationAsset.asset_url} alt="" aria-hidden="true"/>}</div>
+        <label className="avatar-upload-button"><Camera size={15}/> Enviar foto própria<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseAvatar(e.target.files?.[0])}/></label>
+        <small>Ou escolha um item da galeria abaixo · foto própria até 5 MB</small>
+      </div>
+      <div className="profile-asset-picker">
+        <div className="profile-asset-tabs">
+          <button type="button" className={profileAssetTab === "avatar" ? "active" : ""} onClick={() => setProfileAssetTab("avatar")}>Avatares</button>
+          <button type="button" className={profileAssetTab === "decoration" ? "active" : ""} onClick={() => setProfileAssetTab("decoration")}>Decorações</button>
+          <button type="button" className={profileAssetTab === "banner" ? "active" : ""} onClick={() => setProfileAssetTab("banner")}>Banners</button>
+          <button type="button" className={profileAssetTab === "badge" ? "active" : ""} onClick={() => setProfileAssetTab("badge")}>Insígnias</button>
+        </div>
+        {profileAssetTab === "avatar" && <div className="profile-asset-grid">{profileAssets.filter((asset) => asset.asset_type === "avatar").map((asset) => {
+          const owned = profileInventoryIds.includes(asset.id);
+          return <button type="button" key={asset.id} disabled={!owned} className={"profile-asset-option" + (selectedAvatarAssetId === asset.id ? " selected" : "")} onClick={() => { if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview); setAvatarFile(null); setAvatarPreview(""); setSelectedAvatarAssetId(asset.id); }}>
+            <img src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{owned ? asset.rarity : "Bloqueado"}</small>
+          </button>;
+        })}</div>}
+        {profileAssetTab === "decoration" && <div className="profile-asset-grid">
+          <button type="button" className={"profile-asset-option profile-asset-none" + (!selectedDecorationAssetId ? " selected" : "")} onClick={() => setSelectedDecorationAssetId(null)}><span>∅</span><b>Sem decoração</b><small>Limpo</small></button>
+          {profileAssets.filter((asset) => asset.asset_type === "avatar_decoration").map((asset) => {
+            const owned = profileInventoryIds.includes(asset.id);
+            return <button type="button" key={asset.id} disabled={!owned} className={"profile-asset-option" + (selectedDecorationAssetId === asset.id ? " selected" : "")} onClick={() => setSelectedDecorationAssetId(asset.id)}>
+              <span className="decoration-preview"><img src="/profile-assets/avatars/fox.svg" alt=""/><img src={asset.asset_url} alt=""/></span><b>{asset.name}</b><small>{owned ? asset.rarity : "Bloqueado"}</small>
+            </button>;
+          })}
+        </div>}
+        {profileAssetTab === "banner" && <div className="profile-asset-grid banner-asset-grid">
+          <button type="button" className={"profile-asset-option profile-asset-none" + (!selectedBannerAssetId ? " selected" : "")} onClick={() => setSelectedBannerAssetId(null)}><span>∅</span><b>Sem banner</b><small>Limpo</small></button>
+          {profileAssets.filter((asset) => asset.asset_type === "banner").map((asset) => {
+            const owned = profileInventoryIds.includes(asset.id);
+            return <button type="button" key={asset.id} disabled={!owned} className={"profile-asset-option" + (selectedBannerAssetId === asset.id ? " selected" : "")} onClick={() => setSelectedBannerAssetId(asset.id)}>
+              <img className="profile-banner-option" src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{owned ? asset.rarity : "Bloqueado"}</small>
+            </button>;
+          })}
+        </div>}
+        {profileAssetTab === "badge" && <div className="profile-asset-grid badge-asset-grid">{profileAssets.filter((asset) => asset.asset_type === "badge").map((asset) => {
+          const unlocked = profileInventoryIds.includes(asset.id);
+          const badge = profileBadges.find((item) => item.asset_id === asset.id);
+          return <button type="button" key={asset.id} disabled={!unlocked} className={"profile-asset-option" + (badge?.is_featured ? " selected" : "")} onClick={() => void toggleProfileBadge(asset.id)}>
+            <img src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{!unlocked ? "Bloqueada" : badge?.is_featured ? "Destacada no perfil" : "Desbloqueada · toque para destacar"}</small>
+          </button>;
+        })}</div>}
+        <p className="profile-gallery-note">Itens iniciais gratuitos. Insígnias especiais serão desbloqueadas por conquistas na comunidade.</p>
+      </div>
       <label className="profile-form-label">Nome de exibição<input value={editName} maxLength={60} onChange={(e) => setEditName(e.target.value)} placeholder="Seu nome"/></label>
       <label className="profile-form-label">Nome de usuário<input value={editUsername} maxLength={24} onChange={(e) => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase())} placeholder="seuusuario"/><small>3 a 24 caracteres; letras, números e _</small></label>
       <label className="profile-form-label">Bio<textarea value={editBio} maxLength={160} onChange={(e) => setEditBio(e.target.value)} placeholder="Conte um pouco sobre você..." rows={3}/><small>{editBio.length}/160</small></label>
