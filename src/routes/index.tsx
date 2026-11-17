@@ -361,6 +361,7 @@ function App() {
   const equippedBannerAsset = profileAssets.find((asset) => asset.id === equippedProfile?.banner_asset_id) || null;
   const selectedAvatarAsset = profileAssets.find((asset) => asset.id === selectedAvatarAssetId) || null;
   const selectedDecorationAsset = profileAssets.find((asset) => asset.id === selectedDecorationAssetId) || null;
+  const selectedBannerAsset = profileAssets.find((asset) => asset.id === selectedBannerAssetId) || null;
   const currentAvatarUrl = profile?.avatar_url || equippedAvatarAsset?.asset_url || "";
   const featuredBadges = profileBadges.filter((badge) => badge.is_featured).map((badge) => profileAssets.find((asset) => asset.id === badge.asset_id)).filter((asset): asset is ProfileAsset => Boolean(asset));
   useEffect(() => {
@@ -1613,7 +1614,7 @@ mapPrice: result ? Number(result.price) : null,
             </button>)}
           </div>}
           {searchPerformed&&selectedPriceProduct&&<div className="price-results map-price-results">
-            <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} ofertas válidas</h2><small>{selectedPriceProduct.name}{selectedPriceProduct.variant?" · "+selectedPriceProduct.variant:""}</small></div><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Informar preço</button></div>
+            <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} estabelecimentos encontrados</h2><small>{selectedPriceProduct.name}{selectedPriceProduct.variant?" · "+selectedPriceProduct.variant:""}</small></div><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Informar preço</button></div>
             <div className="comparison-summary">
               <div className="comparison-summary-main"><small>MENOR PREÇO ATUALIZADO</small><strong>{comparisonStats.cheapest ? formatMapPrice(Number(comparisonStats.cheapest.price)) : "Sem preço recente"}</strong><span>{comparisonStats.cheapest ? comparisonStats.cheapest.store.name : "Nenhum preço confirmado nos últimos 7 dias"}</span></div>
               <div className="comparison-summary-savings"><small>ECONOMIA POSSÍVEL</small><strong>{comparisonStats.freshCount > 1 ? formatMapPrice(comparisonStats.savings) : "—"}</strong><span>{comparisonStats.freshCount > 1 ? comparisonStats.savingsPercent.toFixed(2).replace(".",",") + "% comparado ao maior preço recente" : "Compare pelo menos duas lojas"}</span></div>
@@ -1658,6 +1659,7 @@ mapPrice: result ? Number(result.price) : null,
         <label className="avatar-upload-button"><Camera size={15}/> Enviar foto própria<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseAvatar(e.target.files?.[0])}/></label>
         <small>Ou escolha um item da galeria abaixo · foto própria até 5 MB</small>
       </div>
+      {selectedBannerAsset && <div className="profile-selected-banner-preview"><img src={selectedBannerAsset.asset_url} alt={"Prévia do banner " + selectedBannerAsset.name}/><small>Prévia do banner · {selectedBannerAsset.name}</small></div>}
       <div className="profile-asset-picker">
         <div className="profile-asset-tabs">
           <button type="button" className={profileAssetTab === "avatar" ? "active" : ""} onClick={() => setProfileAssetTab("avatar")}>Avatares</button>

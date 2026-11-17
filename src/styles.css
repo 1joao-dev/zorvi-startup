@@ -1472,7 +1472,7 @@ body,
 
 /* Discord-inspired profile customization */
 .profile-hero{position:relative;isolation:isolate;padding-top:0}
-.profile-banner{height:116px;width:100%;border-radius:17px;background:radial-gradient(circle at 25% 15%,#8b5cf6 0%,transparent 45%),linear-gradient(120deg,#160c2d,#4c1d95 58%,#9d174d);background-size:cover;background-position:center;margin-bottom:-43px;position:relative;z-index:-1;overflow:hidden}
+.profile-banner{height:116px;width:100%;border-radius:17px;background:radial-gradient(circle at 25% 15%,#8b5cf6 0%,transparent 45%),linear-gradient(120deg,#160c2d,#4c1d95 58%,#9d174d);background-size:cover;background-position:center;margin-bottom:-43px;position:relative;z-index:0;overflow:hidden}
 .profile-banner:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent,#08061055)}
 .profile-avatar-main{z-index:2;border:4px solid var(--bg);width:88px;height:88px;border-radius:30px;margin:0 auto 12px}
 .profile-avatar .avatar-fallback{position:absolute;inset:0;display:grid;place-items:center;z-index:0}
@@ -1505,3 +1505,8 @@ body,
 .badge-asset-grid .profile-asset-option>img{width:50px;height:50px}
 .profile-gallery-note{font-size:8px;line-height:1.45;color:var(--muted);text-align:center;margin:0 5px 2px}
 @media(max-width:370px){.profile-asset-tabs button{font-size:7px}.profile-asset-grid{gap:6px}.profile-asset-option{padding:8px 3px}}
+
+.profile-avatar-main,.edit-avatar-preview{overflow:visible}
+.profile-selected-banner-preview{display:flex;flex-direction:column;gap:5px;padding:7px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
+.profile-selected-banner-preview img{width:100%;height:72px;object-fit:cover;border-radius:8px}
+.profile-selected-banner-preview small{font-size:8px;color:var(--muted);text-align:center}
