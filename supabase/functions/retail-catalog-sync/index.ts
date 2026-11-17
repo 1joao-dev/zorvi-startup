@@ -553,6 +553,15 @@ Deno.serve(async (request: Request) => {
   if (!["sync", "preview"].includes(action)) return json({ error: "Ação inválida." }, 400);
   const selected = providers.filter((p) => source === "all" || p.id === source);
   const startedAt = new Date().toISOString();
+  const triggerSource = body?.trigger_source === "scheduled" ? "scheduled" : "manual";
+  const runId = action === "sync" ? crypto.randomUUID() : null;
+  if (runId) {
+    const { error: logStartError } = await admin.from("retail_catalog_sync_runs").insert({
+      id: runId, started_at: startedAt, status: "running",
+      trigger_source: triggerSource, requested_source: source,
+    });
+    if (logStartError) console.error("[retail-catalog-sync] Não foi possível registrar o início da execução:", logStartError.message);
+  }
   const results = [];
   const errors: Array<{ provider: string; error: string }> = [];
   for (const provider of selected) {
@@ -563,9 +572,29 @@ Deno.serve(async (request: Request) => {
       console.error("[retail-catalog-sync] " + provider.id + ":", message);
     }
   }
+  const finishedAt = new Date().toISOString();
+  const summary = {
+    results,
+    errors,
+    totalProductsFound: results.reduce((sum, row) => sum + Number(row.productsFound || 0), 0),
+    totalEligibleProducts: results.reduce((sum, row) => sum + Number(row.eligibleUniqueProducts || 0), 0),
+    totalNewProductsCreated: results.reduce((sum, row) => sum + Number(row.newProductsCreated || 0), 0),
+    totalPricesInserted: results.reduce((sum, row) => sum + Number(row.pricesInserted || 0), 0),
+    totalDuplicatePricesSkipped: results.reduce((sum, row) => sum + Number(row.duplicatePricesSkipped || 0), 0),
+  };
+  if (runId) {
+    const status = errors.length === 0 ? "success" : results.length === 0 ? "failed" : "partial";
+    const { error: logFinishError } = await admin.from("retail_catalog_sync_runs").update({
+      finished_at: finishedAt,
+      status,
+      summary,
+      error_message: errors.length ? errors.map((item) => item.provider + ": " + item.error).join(" | ").slice(0, 4000) : null,
+    }).eq("id", runId);
+    if (logFinishError) console.error("[retail-catalog-sync] Não foi possível finalizar o log:", logFinishError.message);
+  }
   return json({
-    success: errors.length === 0, action, city: "Teresina", state: "PI", startedAt,
-    finishedAt: new Date().toISOString(), results, errors,
+    success: errors.length === 0, action, city: "Teresina", state: "PI", startedAt, finishedAt,
+    runId, results, errors, summary,
     note: "Ofertas dos catálogos online oficiais; cada canal é separado de lojas físicas. Estoque em filial física não confirmado.",
   }, errors.length ? 207 : 200);
 });
