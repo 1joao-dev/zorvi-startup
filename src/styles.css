@@ -1510,3 +1510,43 @@ body,
 .profile-selected-banner-preview{display:flex;flex-direction:column;gap:5px;padding:7px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
 .profile-selected-banner-preview img{width:100%;height:72px;object-fit:cover;border-radius:8px}
 .profile-selected-banner-preview small{font-size:8px;color:var(--muted);text-align:center}
+
+
+/* ZORVI admin integration monitoring */
+.monitoring-panel{margin:22px 0;padding:15px;border:1px solid #9b35ff55;border-radius:18px;background:linear-gradient(145deg,#1d1230,#100d1b);box-shadow:var(--shadow)}
+.theme-light .monitoring-panel{background:linear-gradient(145deg,#f4eaff,#fff);border-color:#9b35ff44}
+.monitoring-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.monitoring-head h2{font:600 16px "Space Grotesk",sans-serif;margin:0}
+.monitoring-head small{display:block;font-size:9px;color:var(--muted);margin-top:5px}
+.monitoring-head .eyebrow{margin-bottom:5px}
+.monitoring-total-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:16px}
+.monitoring-total-grid>div{display:flex;flex-direction:column;gap:6px;padding:10px 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);min-width:0}
+.monitoring-total-grid small{font-size:8px;color:var(--muted);line-height:1.25}
+.monitoring-total-grid b{font:700 17px "Space Grotesk",sans-serif;color:var(--text)}
+.monitoring-subhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:14px 0 8px}
+.monitoring-subhead b{font-size:11px}
+.monitoring-subhead small{font-size:8px;color:var(--muted);text-align:right}
+.monitoring-integrations{display:flex;flex-direction:column;gap:7px}
+.monitoring-integration{padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
+.monitoring-integration-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.monitoring-integration-title b{font-size:10px}
+.monitoring-integration-title span{font-size:8px;color:#c18aff;padding:4px 7px;border-radius:20px;background:#8b5cf61a}
+.monitoring-integration-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:9px 0 7px}
+.monitoring-integration-stats span{display:flex;flex-direction:column;gap:2px}
+.monitoring-integration-stats strong{font:700 14px "Space Grotesk",sans-serif}
+.monitoring-integration-stats small,.monitoring-last-seen{font-size:8px;color:var(--muted)}
+.monitoring-runs{display:flex;flex-direction:column;gap:7px}
+.monitoring-run{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line)}
+.monitoring-run-status{font-size:8px;font-weight:800;padding:5px 7px;border-radius:20px;background:#ffffff10;color:var(--muted);white-space:nowrap}
+.monitoring-run-status.status-success{background:#16a34a20;color:#4ade80}
+.monitoring-run-status.status-partial{background:#f59e0b20;color:#fbbf24}
+.monitoring-run-status.status-failed{background:#ef444420;color:#f87171}
+.monitoring-run-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.monitoring-run-copy b{font-size:8px}
+.monitoring-run-copy small{font-size:7px;color:var(--muted);overflow-wrap:anywhere}
+.monitoring-run>strong{font-size:9px;white-space:nowrap}
+.monitoring-empty,.monitoring-error{font-size:9px;line-height:1.5;color:var(--muted);padding:10px 2px}
+.monitoring-error{color:#fb7185}
+.monitoring-spin{animation:monitorSpin 1s linear infinite}
+@keyframes monitorSpin{to{transform:rotate(360deg)}}
+@media(max-width:370px){.monitoring-run{grid-template-columns:1fr auto}.monitoring-run-status{justify-self:start}.monitoring-run-copy{grid-column:1/-1;grid-row:2}.monitoring-run>strong{grid-column:2;grid-row:1}}

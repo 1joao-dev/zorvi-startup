@@ -13,6 +13,9 @@ type ProfileAsset = { id:string; slug:string; name:string; asset_type:"avatar"|"
 type EquippedProfile = { user_id:string; avatar_asset_id:string|null; decoration_asset_id:string|null; banner_asset_id:string|null };
 type ProfileBadge = { asset_id:string; is_featured:boolean; unlocked_at:string };
 type PriceHistoryResult = { id:string; product_id:string; store_id:string; price:number; price_type:string; source_label:string; observed_at:string; store_name:string; store_city:string; store_state:string; is_online:boolean };
+type MonitoringIntegration = { id:string; name:string; category:string; city:string; state:string; verifiedPrices:number; products:number; updatedLast24h:number; lastObservedAt:string|null };
+type MonitoringRun = { id:string; started_at:string; finished_at:string|null; status:"running"|"success"|"partial"|"failed"; trigger_source:string; requested_source:string; summary:{ totalPricesInserted?:number; totalNewProductsCreated?:number; totalDuplicatePricesSkipped?:number; totalProductsFound?:number }|null; error_message:string|null };
+type MonitoringDashboard = { generatedAt:string; scheduleLabel:string; totals:{ activeProducts:number; verifiedPrices:number; onlineChannels:number }; lastSyncAt:string|null; integrations:MonitoringIntegration[]; recentRuns:MonitoringRun[] };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null };
@@ -340,6 +343,10 @@ function App() {
   const [profileInventoryIds, setProfileInventoryIds] = useState<string[]>([]);
   const [equippedProfile, setEquippedProfile] = useState<EquippedProfile|null>(null);
   const [profileBadges, setProfileBadges] = useState<ProfileBadge[]>([]);
+  const [isZorviAdmin, setIsZorviAdmin] = useState(false);
+  const [monitoringData, setMonitoringData] = useState<MonitoringDashboard|null>(null);
+  const [monitoringLoading, setMonitoringLoading] = useState(false);
+  const [monitoringError, setMonitoringError] = useState("");
   const [profileAssetTab, setProfileAssetTab] = useState<"avatar"|"decoration"|"banner"|"badge">("avatar");
   const [selectedAvatarAssetId, setSelectedAvatarAssetId] = useState<string|null>(null);
   const [selectedDecorationAssetId, setSelectedDecorationAssetId] = useState<string|null>(null);
@@ -569,6 +576,36 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
   const [chatMode, setChatMode] = useState<"idle"|"ai"|"catalog"|"error">("idle");
   const [toast, setToast] = useState("");
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2300); };
+  const refreshMonitoring = useCallback(async (silent = false) => {
+    if (!supabase || !session?.user.id) return;
+    setMonitoringLoading(true);
+    const { data, error } = await supabase.functions.invoke("zorvi-admin-monitor", { body: { action: "overview" } });
+    if (error) {
+      const status = Number((error as unknown as { context?: { status?: number } }).context?.status || 0);
+      if (status === 401 || status === 403) {
+        setIsZorviAdmin(false);
+        setMonitoringData(null);
+        setMonitoringError("");
+      } else if (!silent) {
+        setMonitoringError(error.message || "Não foi possível carregar o monitoramento.");
+      }
+      setMonitoringLoading(false);
+      return;
+    }
+    setIsZorviAdmin(true);
+    setMonitoringData(data as MonitoringDashboard);
+    setMonitoringError("");
+    setMonitoringLoading(false);
+  }, [session?.user.id]);
+  useEffect(() => {
+    if (!session?.user.id) {
+      setIsZorviAdmin(false);
+      setMonitoringData(null);
+      setMonitoringError("");
+      return;
+    }
+    void refreshMonitoring(true);
+  }, [session?.user.id, refreshMonitoring]);
   const send = async (value: string) => {
     const question = value.trim();
     if (!question || chatSending) return;
@@ -1648,7 +1685,37 @@ mapPrice: result ? Number(result.price) : null,
             <div className="profile-badges">{featuredBadges.map((badge) => <span className="profile-badge-pill" key={badge.id}><img src={badge.asset_url} alt=""/>{badge.name}</span>)}</div>
             <small className="profile-member-since">Explorador desde {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "agora"}</small>
             <button className="edit-profile" onClick={openProfileEditor}>Personalizar perfil</button>
-          </div><div className="profile-menu"><button onClick={() => notify(saved.length + " itens salvos nesta sessão")}><Bookmark size={19}/><span><b>Itens salvos</b><small>Suas descobertas favoritas</small></span><ArrowRight size={17}/></button><button onClick={() => notify("Suas avaliações aparecerão aqui")}><Heart size={19}/><span><b>Avaliações</b><small>Compartilhe suas experiências</small></span><ArrowRight size={17}/></button><button onClick={() => setDark(!dark)}>{dark?<Sun size={19}/>:<Moon size={19}/>}<span><b>Aparência</b><small>{dark?"Tema escuro ativado":"Tema claro ativado"}</small></span><span className={"toggle-pill " + (dark?"on":"")}/></button><button onClick={() => notify("Preferências em breve")}><Settings2 size={19}/><span><b>Configurações</b><small>Privacidade e preferências</small></span><ArrowRight size={17}/></button>{session && <button onClick={signOut}><UserRound size={19}/><span><b>Sair da conta</b><small>Encerrar sua sessão com segurança</small></span><ArrowRight size={17}/></button>}</div>{session && <PriceReviewPanel />}<div className="profile-invite"><Sparkles size={19}/><div><b>Convide sua comunidade</b><small>Descobertas ficam melhores quando compartilhadas.</small></div><button onClick={() => notify("Convite copiado (demonstração)")}><Share2 size={17}/></button></div><p className="demo-note">{session ? "Conta conectada com Supabase." : "Modo demonstração. Configure o Supabase para ativar contas reais."}</p></section>}
+          </div><div className="profile-menu"><button onClick={() => notify(saved.length + " itens salvos nesta sessão")}><Bookmark size={19}/><span><b>Itens salvos</b><small>Suas descobertas favoritas</small></span><ArrowRight size={17}/></button><button onClick={() => notify("Suas avaliações aparecerão aqui")}><Heart size={19}/><span><b>Avaliações</b><small>Compartilhe suas experiências</small></span><ArrowRight size={17}/></button><button onClick={() => setDark(!dark)}>{dark?<Sun size={19}/>:<Moon size={19}/>}<span><b>Aparência</b><small>{dark?"Tema escuro ativado":"Tema claro ativado"}</small></span><span className={"toggle-pill " + (dark?"on":"")}/></button><button onClick={() => notify("Preferências em breve")}><Settings2 size={19}/><span><b>Configurações</b><small>Privacidade e preferências</small></span><ArrowRight size={17}/></button>{session && <button onClick={signOut}><UserRound size={19}/><span><b>Sair da conta</b><small>Encerrar sua sessão com segurança</small></span><ArrowRight size={17}/></button>}</div>{session && <PriceReviewPanel />}
+          {isZorviAdmin && <section className="monitoring-panel">
+            <div className="monitoring-head">
+              <div><p className="eyebrow">ADMINISTRAÇÃO ZORVI</p><h2>Monitoramento das integrações</h2><small>{monitoringData?.scheduleLabel || "Sincronização diária"}</small></div>
+              <button type="button" className="icon-button" onClick={() => void refreshMonitoring(false)} disabled={monitoringLoading} aria-label="Atualizar monitoramento"><RefreshCw size={17} className={monitoringLoading ? "monitoring-spin" : ""}/></button>
+            </div>
+            {monitoringError && <p className="monitoring-error">{monitoringError}</p>}
+            {!monitoringData ? <p className="monitoring-empty">{monitoringLoading ? "Carregando dados das integrações..." : "Nenhum dado de monitoramento disponível."}</p> : <>
+              <div className="monitoring-total-grid">
+                <div><small>Produtos ativos</small><b>{monitoringData.totals.activeProducts.toLocaleString("pt-BR")}</b></div>
+                <div><small>Preços verificados</small><b>{monitoringData.totals.verifiedPrices.toLocaleString("pt-BR")}</b></div>
+                <div><small>Canais online</small><b>{monitoringData.totals.onlineChannels.toLocaleString("pt-BR")}</b></div>
+              </div>
+              <div className="monitoring-subhead"><b>Fontes de preços</b><small>{monitoringData.lastSyncAt ? "Última execução: " + new Date(monitoringData.lastSyncAt).toLocaleString("pt-BR") : "Aguardando primeira execução registrada"}</small></div>
+              <div className="monitoring-integrations">{monitoringData.integrations.map((integration) => <div className="monitoring-integration" key={integration.id}>
+                <div className="monitoring-integration-title"><b>{integration.name}</b><span>{integration.category}</span></div>
+                <div className="monitoring-integration-stats">
+                  <span><strong>{integration.verifiedPrices.toLocaleString("pt-BR")}</strong><small>preços</small></span>
+                  <span><strong>{integration.products.toLocaleString("pt-BR")}</strong><small>produtos</small></span>
+                  <span><strong>{integration.updatedLast24h.toLocaleString("pt-BR")}</strong><small>últimas 24h</small></span>
+                </div>
+                <small className="monitoring-last-seen">{integration.lastObservedAt ? "Último preço: " + new Date(integration.lastObservedAt).toLocaleString("pt-BR") : "Nenhum preço registrado"}</small>
+              </div>)}</div>
+              <div className="monitoring-subhead"><b>Execuções recentes</b><small>Histórico automático e manual</small></div>
+              <div className="monitoring-runs">{monitoringData.recentRuns.length ? monitoringData.recentRuns.slice(0,6).map((run) => <div className="monitoring-run" key={run.id}>
+                <span className={"monitoring-run-status status-" + run.status}>{run.status === "success" ? "Concluída" : run.status === "partial" ? "Parcial" : run.status === "failed" ? "Falhou" : "Em andamento"}</span>
+                <span className="monitoring-run-copy"><b>{run.trigger_source === "scheduled" ? "Agendada" : "Manual"} · {run.requested_source === "all" ? "Todas as fontes" : run.requested_source}</b><small>{new Date(run.started_at).toLocaleString("pt-BR")}{run.error_message ? " · " + run.error_message : ""}</small></span>
+                <strong>{Number(run.summary?.totalPricesInserted || 0).toLocaleString("pt-BR")} preços</strong>
+              </div>) : <p className="monitoring-empty">Ainda não há execuções registradas. A próxima sincronização será exibida aqui.</p>}</div>
+            </>}
+          </section>}<div className="profile-invite"><Sparkles size={19}/><div><b>Convide sua comunidade</b><small>Descobertas ficam melhores quando compartilhadas.</small></div><button onClick={() => notify("Convite copiado (demonstração)")}><Share2 size={17}/></button></div><p className="demo-note">{session ? "Conta conectada com Supabase." : "Modo demonstração. Configure o Supabase para ativar contas reais."}</p></section>}
       </main>
       <nav className="bottom-nav" aria-label="Navegação principal">{[{id:"home" as Tab,label:"Início",icon:Home},{id:"map" as Tab,label:"Mapa",icon:MapPin},{id:"ai" as Tab,label:"ZORVI AI",icon:Sparkles},{id:"search" as Tab,label:"Explorar",icon:Compass},{id:"profile" as Tab,label:"Perfil",icon:UserRound}].map((item) => {const Icon=item.icon;return <button key={item.id} className={"nav-item "+(tab===item.id?"active":"")+(item.id==="ai"?" nav-ai":"")} onClick={() => setTab(item.id)}><span><Icon size={item.id==="ai"?21:20}/></span><small>{item.label}</small></button>;})}</nav>
     </div>
