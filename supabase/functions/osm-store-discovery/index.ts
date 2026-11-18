@@ -10,8 +10,8 @@ const CITY = "Teresina";
 const STATE = "PI";
 const SOURCE_LABEL = "OpenStreetMap contributors · ODbL";
 const ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
 ];
 
 const OVERPASS_QUERY = String.raw`[out:json][timeout:45];
@@ -102,7 +102,7 @@ async function fetchOverpass(): Promise<{ elements: OsmElement[]; endpoint: stri
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-          "Accept": "application/json",
+          "Accept": "*/*",
           "User-Agent": "ZORVI/1.0 (Teresina business directory; OpenStreetMap ODbL attribution)",
         },
         body: "data=" + encodeURIComponent(OVERPASS_QUERY),
@@ -111,7 +111,7 @@ async function fetchOverpass(): Promise<{ elements: OsmElement[]; endpoint: stri
       if (!response.ok) {
         const detail = (await response.text().catch(() => "")).slice(0, 220);
         errors.push(endpoint + " HTTP " + response.status + (detail ? ": " + detail : ""));
-        if (![429, 500, 502, 503, 504].includes(response.status)) break;
+        if (![406, 429, 500, 502, 503, 504].includes(response.status)) break;
         await new Promise((resolve) => setTimeout(resolve, 2500));
         continue;
       }
