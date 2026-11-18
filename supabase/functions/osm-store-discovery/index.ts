@@ -95,9 +95,9 @@ const OVERPASS_QUERY = [
   '[out:json][timeout:45];',
   'area["name"="Teresina"]["boundary"="administrative"]["admin_level"~"^(7|8)$"]->.city;',
   '(',
-  'nwr["name"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
-  'nwr["brand"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
-  'nwr["operator"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
+  'nwr["name"~"(' + KNOWN_BRAND_PATTERN + ')",i](area.city);',
+  'nwr["brand"~"(' + KNOWN_BRAND_PATTERN + ')",i](area.city);',
+  'nwr["operator"~"(' + KNOWN_BRAND_PATTERN + ')",i](area.city);',
   ');',
   'out center tags qt;',
 ].join("\n");
