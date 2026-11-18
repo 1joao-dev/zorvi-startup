@@ -18,12 +18,12 @@ const KNOWN_BRANDS: Record<string, string[]> = {
   "Farmácia": [
     "Drogaria Globo","Pague Menos","Drogasil","Droga Raia","Extrafarma","Drogal",
     "Pop Farma","Farmácia Roval","Farmafórmula","Pharmapele","DrogaVET",
-    "Botica","Drogacenter","Drogaria Luzithania",
+    "Botica","Farmácia Botica","Drogacenter","Drogaria Luzithania",
   ],
   "Mercado": [
     "Atacadão","Assaí","Assaí Atacadista","Mix Atacarejo","Mix Mateus","Mateus",
     "Carvalho Super","Carvalho Supermercados","Pão de Açúcar","Mercadão",
-    "Ferreira Supermercados","Minha Quitandinha","Sam's Club","Supermercado Tudo é Festa",
+    "Ferreira Supermercados","Minha Quitandinha","Sam's Club","Sams Club","Supermercado Tudo é Festa","Tudo é Festa",
   ],
   "Restaurante": [
     "Coco Bambu","McDonald's","McDonalds","Burger King","Bob's","Subway","Giraffas",
@@ -34,6 +34,7 @@ const KNOWN_BRANDS: Record<string, string[]> = {
     "Deltaexpresso","Go Coffee","Grão Espresso","Johnny Joy","Açaí Concept",
     "La Bolaria","Hermanito","Vasto","Vasto Teresina","Restaurante Malaguetta",
     "Malaguetta","Faustino Restaurante","Cantinho do Faustino",
+    "Havanna","Havanna Heladeria","Gran Pastel","Avenca Cafeteria","Chão & Brasa",
   ],
   "Lojas": [
     "Cacau Show","Óticas Diniz","Óticas Carol","Hering","Aramis","Arezzo","Democrata",
@@ -45,7 +46,8 @@ const KNOWN_BRANDS: Record<string, string[]> = {
     "Livraria Nobel","Mercadão dos Óculos","Sergio's","HOPE","Morena Rosa",
     "Lez a Lez","LIVE!","Dress To","Ophicina","Sonho dos Pés","Container Baby & Kids",
     "Anjos Colchões e Sofás","Conserta Smart","Muniz Auto Center",
-    "Pintos","Pintos Shopping","Armazém Paraíba",
+    "Pintos","Pintos Shopping","Armazém Paraíba","Armazem Paraiba",
+    "Claro","TIM","Vivo","Hope Resort","Sapataria Iracema",
   ],
   "Outros": [
     "Coife Odonto","Dentebras","OdontoCompany","Oral Sin","OrthoDontic","Sorridents",
