@@ -10,8 +10,8 @@ const CITY = "Teresina";
 const STATE = "PI";
 const SOURCE_LABEL = "OpenStreetMap contributors · ODbL";
 const ENDPOINTS = [
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
 ];
 
 const OVERPASS_QUERY = String.raw`[out:json][timeout:45];
@@ -25,7 +25,7 @@ area["name"="Teresina"]["boundary"="administrative"]["admin_level"~"^(7|8)$"]->.
   nwr["tourism"~"^(hotel|hostel|guest_house|museum|attraction|gallery)$"]["name"](area.city);
   nwr["leisure"~"^(fitness_centre|sports_centre|swimming_pool)$"]["name"](area.city);
 );
-out center tags;`;
+out center tags qt;`;
 
 type OsmElement = {
   type: "node" | "way" | "relation";
@@ -103,7 +103,7 @@ async function fetchOverpass(): Promise<{ elements: OsmElement[]; endpoint: stri
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
           "Accept": "*/*",
-          "User-Agent": "ZORVI/1.0 (Teresina business directory; OpenStreetMap ODbL attribution)",
+          "User-Agent": "ZORVI/1.0 (Teresina establishment directory; https://github.com/joaosystemss/startup-em-movimento)",
         },
         body: "data=" + encodeURIComponent(OVERPASS_QUERY),
         signal: AbortSignal.timeout(50000),
