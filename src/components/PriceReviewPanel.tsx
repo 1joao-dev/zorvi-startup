@@ -139,7 +139,8 @@ export function PriceReviewPanel() {
       }
       throw new Error(message);
     }
-    if (data?.error) throw new Error(String(data.error));
+    const payload = data as { error?: unknown } | null;
+    if (payload?.error) throw new Error(String(payload.error));
     return data as T;
   };
 
@@ -397,8 +398,7 @@ export function PriceReviewPanel() {
               </div>
             ) : (
               <div className="price-review-empty">Nenhum preço pendente de revisão no momento.</div>
-            )
-              )}
+            )}
             </>
           )}
         </div>
