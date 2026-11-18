@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, ExternalLink, LockKeyhole, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ExternalLink, LockKeyhole, MapPin, RefreshCw, ShieldCheck, ShoppingCart, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type PriceReviewItem = {
@@ -29,6 +29,42 @@ type PriceReviewItem = {
 };
 
 type ReviewAction = "approve" | "reject";
+
+type DirectoryResult = {
+  action: "preview" | "sync";
+  namedEstablishments?: number;
+  rawElements?: number;
+  excludedUnrecognized?: number;
+  byCategory?: Record<string, number>;
+  sample?: Array<{ name: string; category: string; address: string }>;
+  inserted?: number;
+  linked?: number;
+  enrichedCoordinates?: number;
+  skipped?: number;
+  failed?: number;
+  message?: string;
+};
+
+type RetailSyncResult = {
+  action: "preview" | "sync";
+  success?: boolean;
+  summary?: {
+    totalProductsFound?: number;
+    totalEligibleProducts?: number;
+    totalPricesInserted?: number;
+    totalNewProductsCreated?: number;
+    totalDuplicatePricesSkipped?: number;
+  };
+  results?: Array<{
+    provider: string;
+    productsFound?: number;
+    eligibleUniqueProducts?: number;
+    priceOffersReady?: number;
+    pricesInserted?: number;
+    newProductsCreated?: number;
+  }>;
+  errors?: Array<{ provider: string; error: string }>;
+};
 
 function formatReviewPrice(value: number | string, currencyCode: string) {
   const amount = Number(value);
@@ -81,6 +117,69 @@ export function PriceReviewPanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [directoryBusy, setDirectoryBusy] = useState(false);
+  const [directoryResult, setDirectoryResult] = useState<DirectoryResult | null>(null);
+  const [directoryError, setDirectoryError] = useState("");
+  const [retailBusy, setRetailBusy] = useState(false);
+  const [retailResult, setRetailResult] = useState<RetailSyncResult | null>(null);
+  const [retailError, setRetailError] = useState("");
+
+  const invokeAdmin = async <T,>(functionName: string, body: Record<string, unknown>): Promise<T> => {
+    if (!supabase) throw new Error("Supabase não está configurado.");
+    const { data, error: invokeError } = await supabase.functions.invoke(functionName, {
+      body,
+      headers: { "x-zorvi-admin-token": adminToken.trim() },
+    });
+    if (invokeError) {
+      let message = invokeError.message || "Não foi possível executar a operação administrativa.";
+      const context = (invokeError as unknown as { context?: Response }).context;
+      if (context && typeof context.clone === "function") {
+        const payload = await context.clone().json().catch(() => null) as { error?: string } | null;
+        if (payload?.error) message = payload.error;
+      }
+      throw new Error(message);
+    }
+    if (data?.error) throw new Error(String(data.error));
+    return data as T;
+  };
+
+  const runDirectoryAction = async (action: "preview" | "sync") => {
+    setDirectoryBusy(true);
+    setDirectoryError("");
+    try {
+      const data = await invokeAdmin<DirectoryResult>("osm-store-discovery", { action });
+      setDirectoryResult(data);
+      if (action === "sync") {
+        setNotice("Diretório do mapa atualizado. Abra o mapa para conferir os novos pontos.");
+        window.dispatchEvent(new Event("zorvi:directory-updated"));
+      }
+    } catch (cause) {
+      setDirectoryError(cause instanceof Error ? cause.message : "Não foi possível atualizar o diretório.");
+    } finally {
+      setDirectoryBusy(false);
+    }
+  };
+
+  const runRetailAction = async (action: "preview" | "sync") => {
+    setRetailBusy(true);
+    setRetailError("");
+    try {
+      const data = await invokeAdmin<RetailSyncResult>("retail-catalog-sync", { action, source: "all" });
+      setRetailResult(data);
+      if (action === "sync") {
+        const inserted = Number(data.summary?.totalPricesInserted || 0);
+        setNotice(`Sincronização concluída: ${inserted.toLocaleString("pt-BR")} novos preços recebidos.`);
+        window.dispatchEvent(new Event("zorvi:prices-updated"));
+      }
+      if (data.errors?.length) {
+        setRetailError(data.errors.map((item) => item.provider + ": " + item.error).join(" · "));
+      }
+    } catch (cause) {
+      setRetailError(cause instanceof Error ? cause.message : "Não foi possível sincronizar os preços.");
+    } finally {
+      setRetailBusy(false);
+    }
+  };
 
   const invokeReview = async (body: { action: "list_pending" | ReviewAction; price_id?: string }) => {
     if (!supabase) throw new Error("Supabase não está configurado.");
@@ -180,6 +279,10 @@ export function PriceReviewPanel() {
                   setItems([]);
                   setError("");
                   setNotice("");
+                  setDirectoryResult(null);
+                  setDirectoryError("");
+                  setRetailResult(null);
+                  setRetailError("");
                 }}
               />
             </label>
@@ -193,7 +296,50 @@ export function PriceReviewPanel() {
           {notice && <p className="price-review-notice">{notice}</p>}
 
           {authorized && (
-            items.length > 0 ? (
+            <>
+              <div className="price-review-operations">
+                <section className="price-review-operation">
+                  <div className="price-review-operation-head">
+                    <span className="price-review-operation-icon"><MapPin size={16}/></span>
+                    <div><b>Diretório do mapa</b><small>Buscar redes conhecidas e atualizar localizações de Teresina.</small></div>
+                  </div>
+                  <div className="price-review-op-actions">
+                    <button type="button" className="price-review-op-secondary" disabled={directoryBusy || retailBusy} onClick={() => void runDirectoryAction("preview")}>{directoryBusy ? "Consultando..." : "Pré-visualizar"}</button>
+                    <button type="button" className="price-review-op-primary" disabled={directoryBusy || retailBusy} onClick={() => void runDirectoryAction("sync")}>{directoryBusy ? "Atualizando..." : "Atualizar mapa"} <RefreshCw size={13}/></button>
+                  </div>
+                  {directoryError && <p className="price-review-error">{directoryError}</p>}
+                  {directoryResult && <div className="price-review-operation-result">
+                    <b>{directoryResult.action === "preview" ? "Prévia encontrada" : "Importação concluída"}</b>
+                    <span>{directoryResult.action === "preview"
+                      ? (directoryResult.namedEstablishments || 0).toLocaleString("pt-BR") + " estabelecimentos conhecidos encontrados entre " + (directoryResult.rawElements || 0).toLocaleString("pt-BR") + " pontos analisados."
+                      : (directoryResult.inserted || 0).toLocaleString("pt-BR") + " novos pontos · " + (directoryResult.linked || 0).toLocaleString("pt-BR") + " vinculados · " + (directoryResult.enrichedCoordinates || 0).toLocaleString("pt-BR") + " coordenadas enriquecidas."}</span>
+                    {directoryResult.byCategory && <small>{Object.entries(directoryResult.byCategory).map(([category, count]) => category + ": " + count).join(" · ")}</small>}
+                    {directoryResult.sample?.slice(0, 5).map((item) => <small key={item.name + item.address}>{item.name} · {item.address}</small>)}
+                    {directoryResult.message && <small>{directoryResult.message}</small>}
+                  </div>}
+                </section>
+
+                <section className="price-review-operation">
+                  <div className="price-review-operation-head">
+                    <span className="price-review-operation-icon"><ShoppingCart size={16}/></span>
+                    <div><b>Preços e comparativos</b><small>Consultar os catálogos oficiais de Atacadão, Pague Menos, Carvalho e Ferreira.</small></div>
+                  </div>
+                  <div className="price-review-op-actions">
+                    <button type="button" className="price-review-op-secondary" disabled={directoryBusy || retailBusy} onClick={() => void runRetailAction("preview")}>{retailBusy ? "Consultando..." : "Pré-visualizar preços"}</button>
+                    <button type="button" className="price-review-op-primary" disabled={directoryBusy || retailBusy} onClick={() => void runRetailAction("sync")}>{retailBusy ? "Sincronizando..." : "Sincronizar agora"} <RefreshCw size={13}/></button>
+                  </div>
+                  {retailError && <p className="price-review-error">{retailError}</p>}
+                  {retailResult && <div className="price-review-operation-result">
+                    <b>{retailResult.action === "preview" ? "Prévia de preços" : "Sincronização de preços concluída"}</b>
+                    <span>{retailResult.action === "preview"
+                      ? (retailResult.results || []).reduce((sum, item) => sum + Number(item.priceOffersReady || 0), 0).toLocaleString("pt-BR") + " ofertas prontas para comparação em " + (retailResult.summary?.totalEligibleProducts || 0).toLocaleString("pt-BR") + " produtos elegíveis."
+                      : (retailResult.summary?.totalPricesInserted || 0).toLocaleString("pt-BR") + " novos preços · " + (retailResult.summary?.totalProductsFound || 0).toLocaleString("pt-BR") + " produtos encontrados."}</span>
+                    {(retailResult.results || []).map((item) => <small key={item.provider}>{item.provider}: {retailResult.action === "preview" ? (item.priceOffersReady || 0) + " ofertas" : (item.pricesInserted || 0) + " preços novos"}</small>)}
+                  </div>}
+                </section>
+              </div>
+
+              {items.length > 0 ? (
               <div className="price-review-list">
                 {items.map((item) => {
                   const sourceUrl = safeSourceUrl(item.source_url);
@@ -252,6 +398,8 @@ export function PriceReviewPanel() {
             ) : (
               <div className="price-review-empty">Nenhum preço pendente de revisão no momento.</div>
             )
+              )}
+            </>
           )}
         </div>
       )}
