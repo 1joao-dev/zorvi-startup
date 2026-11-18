@@ -89,7 +89,9 @@ function safeUrl(value: unknown, provider: Provider) {
   } catch { return null; }
 }
 async function authorised(request: Request) {
-  const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  const suppliedToken = request.headers.get("x-zorvi-admin-token") || "";
+  const authorization = request.headers.get("authorization") || "";
+  const token = suppliedToken.trim() || authorization.replace(/^Bearer\s+/i, "").trim();
   if (token.length < 32) return false;
   const { data, error } = await admin.rpc("verify_catalog_import_token", { candidate: token });
   if (error) console.error("[retail-catalog-sync] Token check failed:", error.message);
