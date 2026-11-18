@@ -1668,3 +1668,26 @@ body,
   0%,100%{box-shadow:0 0 12px rgba(245,158,11,.08),inset 0 0 12px rgba(251,191,36,.04)}
   50%{box-shadow:0 0 20px rgba(245,158,11,.22),inset 0 0 14px rgba(251,191,36,.1)}
 }
+
+
+/* Contadores dos filtros e operações administrativas */
+.map-filter-row .filter-chip{display:inline-flex;align-items:center;gap:7px}
+.map-filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ffffff14;color:var(--muted);font-size:8px;font-weight:800;line-height:1}
+.map-filter-row .filter-chip.selected .map-filter-count{background:#ffffff26;color:#fff}
+.price-review-operations{display:grid;gap:10px;margin-top:14px}
+.price-review-operation{padding:12px;border:1px solid var(--line);border-radius:13px;background:var(--surface2)}
+.price-review-operation-head{display:flex;align-items:center;gap:9px}
+.price-review-operation-icon{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:10px;background:#8b5cf620;color:#c49aff}
+.price-review-operation-head>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.price-review-operation-head b{font-size:10px}
+.price-review-operation-head small{font-size:8px;line-height:1.45;color:var(--muted)}
+.price-review-op-actions{display:flex;gap:7px;margin-top:10px}
+.price-review-op-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:8px;font-weight:800}
+.price-review-op-actions button:disabled{opacity:.45;cursor:not-allowed}
+.price-review-op-secondary{background:var(--surface);color:var(--text)}
+.price-review-op-primary{background:linear-gradient(135deg,#8b35e8,#5d1bb8);border-color:#a56ce0!important;color:#fff}
+.price-review-operation-result{display:flex;flex-direction:column;gap:5px;margin-top:10px;padding:9px;border-radius:9px;background:#8b5cf610}
+.price-review-operation-result b{font-size:9px;color:var(--text)}
+.price-review-operation-result span,.price-review-operation-result small{font-size:8px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
+.theme-light .price-review-operation{background:#fff}
+@media(max-width:380px){.price-review-op-actions{flex-direction:column}.price-review-op-actions button{width:100%}}
