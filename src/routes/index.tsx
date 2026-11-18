@@ -18,7 +18,7 @@ type MonitoringRun = { id:string; started_at:string; finished_at:string|null; st
 type MonitoringDashboard = { generatedAt:string; scheduleLabel:string; totals:{ activeProducts:number; verifiedPrices:number; onlineChannels:number }; lastSyncAt:string|null; integrations:MonitoringIntegration[]; recentRuns:MonitoringRun[] };
 type FeedPost = { id: string; user_id: string; content: string; image_url: string | null; location_name: string | null; created_at: string; author: UserProfile | null; likes_count: number; comments_count: number; liked: boolean };
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
-type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null };
+type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null; source_url:string|null; source_label:string|null; osm_type:string|null; osm_id:number|null; osm_last_seen_at:string|null };
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type CatalogProduct = { id:string; name:string; normalized_name:string; brand:string|null; variant:string|null; unit:string|null; category:string };
@@ -899,13 +899,21 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
     if (!supabase) return;
     setCatalogLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("stores")
-        .select("id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_match_status,google_checked_at,google_verified_at")
-        .eq("verification_status", "verified")
-        .limit(500);
-      if (error) throw error;
-      setStores((data || []) as Store[]);
+      const allStores: Store[] = [];
+      const pageSize = 500;
+      for (let offset = 0; offset < 50000; offset += pageSize) {
+        const { data, error } = await supabase
+          .from("stores")
+          .select("id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_match_status,google_checked_at,google_verified_at,source_url,source_label,osm_type,osm_id,osm_last_seen_at")
+          .eq("verification_status", "verified")
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        const page = (data || []) as Store[];
+        allStores.push(...page);
+        if (page.length < pageSize) break;
+      }
+      setStores(allStores);
       setStoreError("");
     } catch (error) {
       setStoreError(
@@ -1579,7 +1587,7 @@ mapPrice: result ? Number(result.price) : null,
           </form>}
           {!cityFormOpen && selectedCity && <div className="map-region-summary"><span>Buscando em <b>{selectedCity}, {selectedState}</b></span><button onClick={() => setCityFormOpen(true)}>Alterar cidade</button></div>}
           <div className="filter-row map-filter-row" aria-label="Filtrar estabelecimentos">
-            {["Todos","Farmácia","Mercado","Restaurante","Lojas"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}</button>)}
+            {["Todos","Farmácia","Mercado","Restaurante","Lojas","Outros"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}</button>)}
           </div>
 
           <div className="zorvi-map-frame">
@@ -1593,6 +1601,7 @@ mapPrice: result ? Number(result.price) : null,
             {manualLocationPicking&&<div className="map-picking-hint">Toque no mapa para marcar sua localização</div>}
             <button className="zorvi-map-gps" onClick={requestLocation} aria-label="Centralizar na minha localização"><LocateFixed size={19}/></button>
             <div className="zorvi-map-legend"><span><i className="legend-user"/> Você</span><span><i className="legend-pharmacy"/> Farmácias</span><span><i className="legend-market"/> Mercados</span><span><i className="legend-other"/> Outros</span></div>
+            <div className="map-data-attribution">Estabelecimentos: © OpenStreetMap contributors · ODbL</div>
           </div>
 
           <section className={"map-results-sheet" + (selectedMapStore ? " has-selection" : "") + (mapSheetExpanded ? " is-expanded" : "")} aria-label="Estabelecimentos na região">
@@ -1619,6 +1628,7 @@ mapPrice: result ? Number(result.price) : null,
               </div>
               <div className="map-selected-actions">
                 {selectedMapStore.website_url && <a href={selectedMapStore.website_url} target="_blank" rel="noreferrer">Site</a>}
+                {selectedMapStore.source_url && selectedMapStore.osm_type && <a href={selectedMapStore.source_url} target="_blank" rel="noreferrer">OpenStreetMap</a>}
                 {selectedMapStore.google_place_id && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selectedMapStore.brand_name||selectedMapStore.name) + " " + selectedMapStore.address + " " + selectedMapStore.city)}&query_place_id=${encodeURIComponent(selectedMapStore.google_place_id)}`} target="_blank" rel="noreferrer">Google Maps</a>}
                 {selectedMapStore.latitude !== null && selectedMapStore.longitude !== null && <a href={`https://www.google.com/maps/dir/?api=1&destination=${selectedMapStore.latitude},${selectedMapStore.longitude}`} target="_blank" rel="noreferrer">Rotas</a>}
               </div>

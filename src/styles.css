@@ -1598,3 +1598,25 @@ body,
 @keyframes zorviBannerShimmer{0%,15%{transform:translateX(-65%)}85%,100%{transform:translateX(65%)}}
 @keyframes zorviBannerFlicker{0%,96%,100%{filter:brightness(1)}97%{filter:brightness(1.18)}98%{filter:brightness(.95)}}
 @media(prefers-reduced-motion:reduce){.profile-avatar-photo,.profile-avatar-decoration,.profile-banner,.profile-banner:before,.profile-selected-banner-preview img,.profile-asset-option img,.decoration-preview-frame{animation:none!important;transition:none!important}}
+
+
+/* OpenStreetMap establishment attribution */
+.map-data-attribution{
+  position:absolute;
+  left:12px;
+  bottom:9px;
+  z-index:500;
+  max-width:calc(100% - 24px);
+  padding:3px 7px;
+  border-radius:5px;
+  color:rgba(255,255,255,.78);
+  background:rgba(8,12,22,.66);
+  font-size:9px;
+  line-height:1.35;
+  pointer-events:none;
+  backdrop-filter:blur(6px);
+}
+@media(max-width:520px){
+  .map-filter-row{flex-wrap:wrap}
+  .map-data-attribution{font-size:8px;bottom:7px}
+}
