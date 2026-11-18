@@ -100,7 +100,7 @@ const OVERPASS_QUERY = [
   'nwr["operator"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
   ');',
   'out center tags qt;',
-].join("\\n");
+].join("\n");
 
 type OsmElement = {
   type: "node" | "way" | "relation";
