@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img">
+<defs>
+ <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#160e27"/><stop offset=".45" stop-color="#8d1b36"/><stop offset="1" stop-color="#f06b32"/></linearGradient>
+ <linearGradient id="streak"><stop stop-color="#fff5bd" stop-opacity="0"/><stop offset=".5" stop-color="#ffd166"/><stop offset="1" stop-color="#ff4b54" stop-opacity="0"/></linearGradient>
+ <radialGradient id="flare"><stop stop-color="#fff5c4"/><stop offset=".25" stop-color="#ffb64d" stop-opacity=".85"/><stop offset="1" stop-color="#ff513d" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1200" height="360" fill="url(#bg)"/>
+<ellipse cx="630" cy="170" rx="360" ry="230" fill="url(#flare)" opacity=".9"/>
+<g stroke="url(#streak)" stroke-width="16" stroke-linecap="round"><path d="M-40 78L510 110"/><path d="M-30 145L430 168"/><path d="M680 55L1240 18"/><path d="M760 125L1240 93"/><path d="M-20 275L430 226"/><path d="M790 275L1230 310"/></g>
+<g fill="#ffd166"><path d="M220 0L280 0 215 124 295 124 130 302 180 170 110 170Z"/><path d="M950 0L1000 0 950 95 1012 95 885 235 925 135 870 135Z"/><path d="M610 190L654 190 610 264 666 264 560 350 590 285 545 285Z"/></g>
+<g fill="#fff0bd" opacity=".75"><circle cx="470" cy="80" r="4"/><circle cx="740" cy="260" r="5"/><circle cx="1080" cy="205" r="4"/><circle cx="340" cy="290" r="4"/></g>
+</svg>

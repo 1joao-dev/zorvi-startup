@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img">
+<defs><linearGradient id="bolt"><stop stop-color="#fff4a8"/><stop offset=".48" stop-color="#ffb13b"/><stop offset="1" stop-color="#ef3340"/></linearGradient></defs>
+<circle cx="256" cy="256" r="225" fill="none" stroke="#ff5a52" stroke-width="9" stroke-dasharray="42 15 8 15" opacity=".9"/>
+<circle cx="256" cy="256" r="207" fill="none" stroke="#ffd166" stroke-width="4" stroke-dasharray="7 18"/>
+<path d="M102 118L157 155 116 175 161 206 78 193 119 169 82 151Z" fill="url(#bolt)" stroke="#8e182d" stroke-width="7" stroke-linejoin="round"/>
+<path d="M410 118L355 155 396 175 351 206 434 193 393 169 430 151Z" fill="url(#bolt)" stroke="#8e182d" stroke-width="7" stroke-linejoin="round"/>
+<path d="M71 300L127 320 92 347 151 366 56 366 93 344 56 329Z" fill="url(#bolt)" stroke="#8e182d" stroke-width="7" stroke-linejoin="round"/>
+<path d="M441 300L385 320 420 347 361 366 456 366 419 344 456 329Z" fill="url(#bolt)" stroke="#8e182d" stroke-width="7" stroke-linejoin="round"/>
+<path d="M256 20L268 54 302 66 268 78 256 112 244 78 210 66 244 54Z" fill="#fff0a3"/>
+<path d="M256 400L268 434 302 446 268 458 256 492 244 458 210 446 244 434Z" fill="#fff0a3"/>
+</svg>

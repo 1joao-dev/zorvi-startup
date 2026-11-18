@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img">
+<defs><linearGradient id="gold"><stop stop-color="#fff0a8"/><stop offset="1" stop-color="#c07a27"/></linearGradient></defs>
+<circle cx="256" cy="256" r="220" fill="#5b2c44" stroke="#f8d57d" stroke-width="15"/>
+<circle cx="256" cy="256" r="188" fill="#2b1d38" stroke="#d99445" stroke-width="7"/>
+<path d="M154 142L350 142 370 206 278 229 254 193 176 207Z" fill="url(#gold)" stroke="#6a3b27" stroke-width="12" stroke-linejoin="round"/>
+<path d="M255 197L292 222 207 369 170 345Z" fill="#dca15b" stroke="#6a3b27" stroke-width="12"/>
+<path d="M122 107l9-24 9 24 24 9-24 9-9 24-9-24-24-9zM380 322l8-20 8 20 20 8-20 8-8 20-8-20-20-8z" fill="#fff1a8"/>
+</svg>

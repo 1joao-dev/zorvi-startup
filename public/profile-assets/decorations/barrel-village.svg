@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img">
+<defs>
+ <linearGradient id="wood"><stop stop-color="#ffe0a3"/><stop offset=".5" stop-color="#b86b36"/><stop offset="1" stop-color="#713719"/></linearGradient>
+ <linearGradient id="steel"><stop stop-color="#f8f4dc"/><stop offset=".5" stop-color="#8795a0"/><stop offset="1" stop-color="#46545e"/></linearGradient>
+</defs>
+<circle cx="256" cy="256" r="224" fill="none" stroke="#f5c77b" stroke-width="12" stroke-dasharray="22 10" opacity=".9"/>
+<circle cx="256" cy="256" r="207" fill="none" stroke="#713719" stroke-width="7"/>
+<path d="M146 361Q256 390 366 361L350 463Q256 494 162 463Z" fill="url(#wood)" stroke="#4e2818" stroke-width="10"/>
+<path d="M151 384Q256 409 361 384M157 443Q256 467 355 443" fill="none" stroke="url(#steel)" stroke-width="15"/>
+<path d="M194 369L200 470M256 380V478M318 369L312 470" stroke="#6c351c" stroke-width="7"/>
+<ellipse cx="256" cy="362" rx="111" ry="28" fill="#d18a4d" stroke="#4e2818" stroke-width="9"/>
+<path d="M90 140l11-25 11 25 25 11-25 11-11 25-11-25-25-11zM399 137l10-22 10 22 22 10-22 10-10 22-10-22-22-10z" fill="#fff0b3"/>
+<circle cx="83" cy="280" r="10" fill="#f7c65e"/><circle cx="429" cy="278" r="10" fill="#f7c65e"/>
+</svg>

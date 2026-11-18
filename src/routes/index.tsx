@@ -1715,6 +1715,7 @@ mapPrice: result ? Number(result.price) : null,
             </div>
             <h1>{accountName}</h1>
             <p>@{profile?.username || "explorador"} · {session?.user.email || "Explorador ZORVI"}</p>
+            {isZorviAdmin && <span className="profile-admin-pill"><span aria-hidden="true">✦</span> ADMIN ZORVI · COLEÇÃO COMPLETA</span>}
             {profile?.bio && <p className="profile-bio">{profile.bio}</p>}
             <div className="profile-badges">{featuredBadges.map((badge) => <span className="profile-badge-pill" key={badge.id}><img src={badge.asset_url} alt=""/>{badge.name}</span>)}</div>
             <small className="profile-member-since">Explorador desde {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "agora"}</small>
@@ -1766,6 +1767,7 @@ mapPrice: result ? Number(result.price) : null,
         <label className="avatar-upload-button"><Camera size={15}/> Enviar foto própria<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseAvatar(e.target.files?.[0])}/></label>
         <small>Ou escolha um item da galeria abaixo · foto própria até 5 MB</small>
       </div>
+      {isZorviAdmin && <div className="profile-admin-unlock-note"><b>✦ ACESSO ADMINISTRADOR ATIVO</b><span>Todos os avatares, decorações, banners e insígnias estão liberados nesta conta. Novos itens também serão desbloqueados automaticamente.</span></div>}
       {selectedBannerAsset && <div className="profile-selected-banner-preview"><img className={getProfileAnimationClass(selectedBannerAsset.animation_type)} src={selectedBannerAsset.asset_url} alt={"Prévia do banner " + selectedBannerAsset.name}/><small>Prévia do banner · {selectedBannerAsset.name}{selectedBannerAsset.animation_type !== "none" ? " · Animado" : ""}</small></div>}
       <div className="profile-asset-picker">
         <div className="profile-asset-tabs">
@@ -1805,7 +1807,7 @@ mapPrice: result ? Number(result.price) : null,
             <img src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{!unlocked ? "Bloqueada" : badge?.is_featured ? "Destacada no perfil" : "Desbloqueada · toque para destacar"}</small>
           </button>;
         })}</div>}
-        <p className="profile-gallery-note">Itens iniciais gratuitos. Insígnias especiais serão desbloqueadas por conquistas na comunidade.</p>
+        <p className="profile-gallery-note">{isZorviAdmin ? "Acesso ADM: coleção completa desbloqueada, incluindo os próximos lançamentos." : "Itens iniciais gratuitos. Insígnias especiais serão desbloqueadas por conquistas na comunidade."}</p>
       </div>
       <label className="profile-form-label">Nome de exibição<input value={editName} maxLength={60} onChange={(e) => setEditName(e.target.value)} placeholder="Seu nome"/></label>
       <label className="profile-form-label">Nome de usuário<input value={editUsername} maxLength={24} onChange={(e) => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase())} placeholder="seuusuario"/><small>3 a 24 caracteres; letras, números e _</small></label>
