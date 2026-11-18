@@ -902,10 +902,13 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
       const allStores: Store[] = [];
       const pageSize = 500;
       for (let offset = 0; offset < 50000; offset += pageSize) {
-        const { data, error } = await supabase
+        let pageQuery = supabase
           .from("stores")
           .select("id,name,category,address,city,state,latitude,longitude,website_url,brand_name,brand_slug,brand_logo_url,coordinate_precision,coordinate_source,geocoded_at,geocode_attempted_at,google_place_id,google_match_status,google_checked_at,google_verified_at,source_url,source_label,osm_type,osm_id,osm_last_seen_at")
-          .eq("verification_status", "verified")
+          .eq("verification_status", "verified");
+        if (selectedCity) pageQuery = pageQuery.eq("city", selectedCity);
+        if (selectedState) pageQuery = pageQuery.eq("state", selectedState);
+        const { data, error } = await pageQuery
           .order("id", { ascending: true })
           .range(offset, offset + pageSize - 1);
         if (error) throw error;
@@ -924,7 +927,7 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
     } finally {
       setCatalogLoading(false);
     }
-  }, []);
+  }, [selectedCity, selectedState]);
 
   useEffect(() => {
     if (tab === "map") void loadNearbyStores();
