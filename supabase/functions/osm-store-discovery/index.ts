@@ -18,11 +18,12 @@ const KNOWN_BRANDS: Record<string, string[]> = {
   "Farmácia": [
     "Drogaria Globo","Pague Menos","Drogasil","Droga Raia","Extrafarma","Drogal",
     "Pop Farma","Farmácia Roval","Farmafórmula","Pharmapele","DrogaVET",
+    "Botica","Drogacenter","Drogaria Luzithania",
   ],
   "Mercado": [
-    "Atacadão","Assaí","Mix Atacarejo","Mix Mateus","Mateus","Carvalho Super",
-    "Carvalho Supermercados","Pão de Açúcar","Mercadão","Ferreira Supermercados",
-    "Minha Quitandinha",
+    "Atacadão","Assaí","Assaí Atacadista","Mix Atacarejo","Mix Mateus","Mateus",
+    "Carvalho Super","Carvalho Supermercados","Pão de Açúcar","Mercadão",
+    "Ferreira Supermercados","Minha Quitandinha","Sam's Club","Supermercado Tudo é Festa",
   ],
   "Restaurante": [
     "Coco Bambu","McDonald's","McDonalds","Burger King","Bob's","Subway","Giraffas",
@@ -31,7 +32,8 @@ const KNOWN_BRANDS: Record<string, string[]> = {
     "Kopenhagen","Milky Moo","Mr. Cheney","Mr. Shake","Griletto","Gendai",
     "Ital'in House","Companhia do Churrasco","Cheirin Bão","Casa do Pão de Queijo",
     "Deltaexpresso","Go Coffee","Grão Espresso","Johnny Joy","Açaí Concept",
-    "La Bolaria","Hermanito",
+    "La Bolaria","Hermanito","Vasto","Vasto Teresina","Restaurante Malaguetta",
+    "Malaguetta","Faustino Restaurante","Cantinho do Faustino",
   ],
   "Lojas": [
     "Cacau Show","Óticas Diniz","Óticas Carol","Hering","Aramis","Arezzo","Democrata",
@@ -43,6 +45,7 @@ const KNOWN_BRANDS: Record<string, string[]> = {
     "Livraria Nobel","Mercadão dos Óculos","Sergio's","HOPE","Morena Rosa",
     "Lez a Lez","LIVE!","Dress To","Ophicina","Sonho dos Pés","Container Baby & Kids",
     "Anjos Colchões e Sofás","Conserta Smart","Muniz Auto Center",
+    "Pintos","Pintos Shopping","Armazém Paraíba",
   ],
   "Outros": [
     "Coife Odonto","Dentebras","OdontoCompany","Oral Sin","OrthoDontic","Sorridents",
@@ -158,9 +161,10 @@ function getAdminKey(): string | null {
 }
 
 async function authorized(request: Request, admin: ReturnType<typeof createClient>): Promise<boolean> {
+  const suppliedToken = request.headers.get("x-zorvi-admin-token") || "";
   const authorization = request.headers.get("Authorization") || "";
-  const token = authorization.replace(/^Bearer\s+/i, "").trim();
-  if (!token || token === authorization || token.length < 32) return false;
+  const token = suppliedToken.trim() || authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!token || token.length < 32) return false;
   const { data, error } = await admin.rpc("verify_catalog_import_token", { candidate: token });
   if (error) {
     console.error("[osm-store-discovery] Falha ao validar token de importação.", error.message);
