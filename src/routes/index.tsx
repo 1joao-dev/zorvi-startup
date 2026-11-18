@@ -9,7 +9,7 @@ import { ArrowRight, Bell, Bookmark, Camera, Check, Compass, Heart, Home, MapPin
 
 type Tab = "home" | "map" | "ai" | "search" | "profile";
 type UserProfile = { id: string; username: string | null; display_name: string; avatar_url: string | null; bio: string | null; created_at: string };
-type ProfileAsset = { id:string; slug:string; name:string; asset_type:"avatar"|"avatar_decoration"|"banner"|"badge"; asset_url:string; rarity:string; description:string; is_free:boolean; sort_order:number };
+type ProfileAsset = { id:string; slug:string; name:string; asset_type:"avatar"|"avatar_decoration"|"banner"|"badge"; asset_url:string; rarity:string; description:string; is_free:boolean; sort_order:number; animation_type:"none"|"float"|"pulse"|"bob"|"glow"|"spin"|"orbit"|"shimmer"|"twinkle"|"flicker"|"drift"|"bounce"; fit_config:CSSProperties|null };
 type EquippedProfile = { user_id:string; avatar_asset_id:string|null; decoration_asset_id:string|null; banner_asset_id:string|null };
 type ProfileBadge = { asset_id:string; is_featured:boolean; unlocked_at:string };
 type PriceHistoryResult = { id:string; product_id:string; store_id:string; price:number; price_type:string; source_label:string; observed_at:string; store_name:string; store_city:string; store_state:string; is_online:boolean };
@@ -141,6 +141,19 @@ function ensureLeaflet():Promise<LeafletApi>{
   return leafletLoader;
 }
 function formatMapPrice(value:number){return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(value);}
+const PROFILE_ANIMATION_TYPES = new Set(["float","pulse","bob","glow","spin","orbit","shimmer","twinkle","flicker","drift","bounce"]);
+function getProfileAnimationClass(animationType?:string|null){
+  return animationType && PROFILE_ANIMATION_TYPES.has(animationType) ? "asset-motion-" + animationType : "";
+}
+function getDecorationFitStyle(asset:ProfileAsset|null):CSSProperties{
+  const defaults:Record<string,CSSProperties>={
+    "decoration-orbit":{top:"-14%",left:"-14%",width:"128%",height:"128%",objectFit:"contain"},
+    "decoration-halo":{top:"-12%",left:"-12%",width:"124%",height:"124%",objectFit:"contain"},
+    "decoration-crown":{top:"-27%",left:"-19%",width:"138%",height:"138%",objectFit:"contain"},
+    "decoration-laurel":{top:"-18%",left:"-20%",width:"140%",height:"140%",objectFit:"contain"},
+  };
+  return {top:"-14%",left:"-14%",width:"128%",height:"128%",objectFit:"contain",...(asset ? defaults[asset.slug] || {} : {}),...(asset?.fit_config || {})};
+}
 function getMapPriceLabel(priceType:string|null|undefined){if(priceType==="estimated") return "Estimativa";if(priceType==="official_site") return "Preço publicado no site oficial";if(priceType==="community_report") return "Relato da comunidade validado";if(priceType==="in_store") return "Preço informado em loja";return "Preço verificado";}
 function escapeMapHtml(value:string){const entities:Record<string,string>={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};return value.replace(/[&<>"']/g,char=>entities[char]||char);}
 function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category">){
@@ -381,7 +394,7 @@ function App() {
     const userId = session.user.id;
     Promise.all([
       supabase.from("profiles").select("id, username, display_name, avatar_url, bio, created_at").eq("id", userId).maybeSingle(),
-      supabase.from("profile_assets").select("id,slug,name,asset_type,asset_url,rarity,description,is_free,sort_order").eq("is_active", true).order("sort_order", { ascending: true }),
+      supabase.from("profile_assets").select("id,slug,name,asset_type,asset_url,rarity,description,is_free,sort_order,animation_type,fit_config").eq("is_active", true).order("sort_order", { ascending: true }),
       supabase.from("user_profile_inventory").select("asset_id").eq("user_id", userId),
       supabase.from("user_profile_equipped").select("user_id,avatar_asset_id,decoration_asset_id,banner_asset_id").eq("user_id", userId).maybeSingle(),
       supabase.from("user_profile_badges").select("asset_id,is_featured,unlocked_at").eq("user_id", userId).order("unlocked_at", { ascending: true })
@@ -1677,8 +1690,15 @@ mapPrice: result ? Number(result.price) : null,
         </section>}
         {tab === "search" && <section className="screen"><div className="screen-title"><div><p className="eyebrow">ENCONTRE SUA PRÓXIMA DESCOBERTA</p><h1>Explorar</h1><p>Produtos, lugares, preços e experiências.</p></div></div><div className="search-large"><Search size={20}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O que você está procurando?"/><button onClick={() => setQuery("")}><X size={16}/></button></div><p className="eyebrow category-label">CATEGORIAS POPULARES</p><div className="category-grid">{[{name:"Mercados",icon:ShoppingBag},{name:"Restaurantes",icon:Utensils},{name:"Farmácias",icon:Plus},{name:"Experiências",icon:Sparkles}].map((c) => {const Icon=c.icon;return <button className="category-card" key={c.name} onClick={() => {setFilter(c.name==="Mercados"?"Mercado":c.name==="Restaurantes"?"Restaurante":c.name==="Farmácias"?"Farmácia":"Todos");setTab("map");}}><span className="place-icon"><Icon size={21}/></span><b>{c.name}</b><ArrowRight size={15}/></button>;})}</div><div className="section-heading search-trends"><div><p className="eyebrow">EM ALTA NA COMUNIDADE</p><h2>Descobertas populares</h2></div></div>{["Cafés para conhecer","Economize nas compras","Descubra com a ZORVI AI"].map((t,i) => <button className="trend-row" key={t} onClick={() => setTab(i===2?"ai":"map")}><span className="trend-icon">{i===2?<Sparkles size={18}/>:<ShoppingBag size={18}/>}</span><span><b>{t}</b><small>Ideias para sua próxima descoberta</small></span><ArrowRight size={17}/></button>)}<p className="demo-note">Resultados e tendências são exemplos para demonstração.</p></section>}
         {tab === "profile" && <section className="screen"><div className="profile-top"><p className="eyebrow">SEU ESPAÇO ZORVI</p><button className="icon-button" onClick={() => notify("Configurações em breve")}><Settings2 size={20}/></button></div><div className="profile-hero">
-            <div className="profile-banner" style={{ backgroundImage: equippedBannerAsset ? `url("${equippedBannerAsset.asset_url}")` : undefined }} aria-hidden="true"/>
-            <div className="profile-avatar profile-avatar-main"><span className="avatar-fallback">{accountInitial}</span>{currentAvatarUrl && <img className="profile-avatar-photo" src={currentAvatarUrl} alt={"Foto de " + accountName} onError={(event) => { event.currentTarget.style.display = "none"; }}/ >}{equippedDecorationAsset && <img className="profile-avatar-decoration" src={equippedDecorationAsset.asset_url} alt="" aria-hidden="true"/>}<span className="profile-online"/></div>
+            <div className={`profile-banner ${getProfileAnimationClass(equippedBannerAsset?.animation_type)}`} style={{ backgroundImage: equippedBannerAsset ? `url("${equippedBannerAsset.asset_url}")` : undefined }} aria-hidden="true"/>
+            <div className="profile-avatar profile-avatar-main">
+              <span className="profile-avatar-core">
+                <span className="avatar-fallback">{accountInitial}</span>
+                {currentAvatarUrl && <img className={`profile-avatar-photo ${getProfileAnimationClass(profile?.avatar_url ? null : equippedAvatarAsset?.animation_type)}`} src={currentAvatarUrl} alt={"Foto de " + accountName} onError={(event) => { event.currentTarget.style.display = "none"; }}/>}
+              </span>
+              {equippedDecorationAsset && <img className={`profile-avatar-decoration ${getProfileAnimationClass(equippedDecorationAsset.animation_type)}`} style={getDecorationFitStyle(equippedDecorationAsset)} src={equippedDecorationAsset.asset_url} alt="" aria-hidden="true"/>}
+              <span className="profile-online"/>
+            </div>
             <h1>{accountName}</h1>
             <p>@{profile?.username || "explorador"} · {session?.user.email || "Explorador ZORVI"}</p>
             {profile?.bio && <p className="profile-bio">{profile.bio}</p>}
@@ -1722,11 +1742,17 @@ mapPrice: result ? Number(result.price) : null,
     {editProfileOpen && <div className="modal-backdrop" onClick={() => !profileSaving && setEditProfileOpen(false)}><div className="composer-modal profile-edit-modal" onClick={(e) => e.stopPropagation()}>
       <div className="modal-head"><h2>Editar perfil</h2><button className="icon-button" onClick={() => setEditProfileOpen(false)} disabled={profileSaving}><X size={19}/></button></div>
       <div className="avatar-edit-wrap">
-        <div className="profile-avatar edit-avatar-preview"><span className="avatar-fallback">{accountInitial}</span>{(avatarPreview || selectedAvatarAsset) && <img className="profile-avatar-photo" src={avatarPreview || selectedAvatarAsset?.asset_url || ""} alt="Prévia do avatar" onError={(event) => { event.currentTarget.style.display = "none"; }}/ >}{selectedDecorationAsset && <img className="profile-avatar-decoration" src={selectedDecorationAsset.asset_url} alt="" aria-hidden="true"/>}</div>
+        <div className="profile-avatar edit-avatar-preview">
+          <span className="profile-avatar-core">
+            <span className="avatar-fallback">{accountInitial}</span>
+            {(avatarPreview || selectedAvatarAsset) && <img className={`profile-avatar-photo ${getProfileAnimationClass(avatarPreview ? null : selectedAvatarAsset?.animation_type)}`} src={avatarPreview || selectedAvatarAsset?.asset_url || ""} alt="Prévia do avatar" onError={(event) => { event.currentTarget.style.display = "none"; }}/>}
+          </span>
+          {selectedDecorationAsset && <img className={`profile-avatar-decoration ${getProfileAnimationClass(selectedDecorationAsset.animation_type)}`} style={getDecorationFitStyle(selectedDecorationAsset)} src={selectedDecorationAsset.asset_url} alt="" aria-hidden="true"/>}
+        </div>
         <label className="avatar-upload-button"><Camera size={15}/> Enviar foto própria<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseAvatar(e.target.files?.[0])}/></label>
         <small>Ou escolha um item da galeria abaixo · foto própria até 5 MB</small>
       </div>
-      {selectedBannerAsset && <div className="profile-selected-banner-preview"><img src={selectedBannerAsset.asset_url} alt={"Prévia do banner " + selectedBannerAsset.name}/><small>Prévia do banner · {selectedBannerAsset.name}</small></div>}
+      {selectedBannerAsset && <div className="profile-selected-banner-preview"><img className={getProfileAnimationClass(selectedBannerAsset.animation_type)} src={selectedBannerAsset.asset_url} alt={"Prévia do banner " + selectedBannerAsset.name}/><small>Prévia do banner · {selectedBannerAsset.name}{selectedBannerAsset.animation_type !== "none" ? " · Animado" : ""}</small></div>}
       <div className="profile-asset-picker">
         <div className="profile-asset-tabs">
           <button type="button" className={profileAssetTab === "avatar" ? "active" : ""} onClick={() => setProfileAssetTab("avatar")}>Avatares</button>
@@ -1737,7 +1763,7 @@ mapPrice: result ? Number(result.price) : null,
         {profileAssetTab === "avatar" && <div className="profile-asset-grid">{profileAssets.filter((asset) => asset.asset_type === "avatar").map((asset) => {
           const owned = profileInventoryIds.includes(asset.id);
           return <button type="button" key={asset.id} disabled={!owned} className={"profile-asset-option" + (selectedAvatarAssetId === asset.id ? " selected" : "")} onClick={() => { if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview); setAvatarFile(null); setAvatarPreview(""); setSelectedAvatarAssetId(asset.id); }}>
-            <img src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{owned ? asset.rarity : "Bloqueado"}</small>
+            <img className={getProfileAnimationClass(asset.animation_type)} src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{owned ? asset.rarity + (asset.animation_type !== "none" ? " · Animado" : "") : "Bloqueado"}</small>
           </button>;
         })}</div>}
         {profileAssetTab === "decoration" && <div className="profile-asset-grid">
@@ -1745,7 +1771,7 @@ mapPrice: result ? Number(result.price) : null,
           {profileAssets.filter((asset) => asset.asset_type === "avatar_decoration").map((asset) => {
             const owned = profileInventoryIds.includes(asset.id);
             return <button type="button" key={asset.id} disabled={!owned} className={"profile-asset-option" + (selectedDecorationAssetId === asset.id ? " selected" : "")} onClick={() => setSelectedDecorationAssetId(asset.id)}>
-              <span className="decoration-preview"><img src="/profile-assets/avatars/fox.svg" alt=""/><img src={asset.asset_url} alt=""/></span><b>{asset.name}</b><small>{owned ? asset.rarity : "Bloqueado"}</small>
+              <span className="decoration-preview"><img src={avatarPreview || selectedAvatarAsset?.asset_url || currentAvatarUrl || "/profile-assets/avatars/fox.svg"} alt=""/><img className={`decoration-preview-frame ${getProfileAnimationClass(asset.animation_type)}`} style={getDecorationFitStyle(asset)} src={asset.asset_url} alt=""/></span><b>{asset.name}</b><small>{owned ? asset.rarity + (asset.animation_type !== "none" ? " · Animada" : "") : "Bloqueado"}</small>
             </button>;
           })}
         </div>}
@@ -1754,7 +1780,7 @@ mapPrice: result ? Number(result.price) : null,
           {profileAssets.filter((asset) => asset.asset_type === "banner").map((asset) => {
             const owned = profileInventoryIds.includes(asset.id);
             return <button type="button" key={asset.id} disabled={!owned} className={"profile-asset-option" + (selectedBannerAssetId === asset.id ? " selected" : "")} onClick={() => setSelectedBannerAssetId(asset.id)}>
-              <img className="profile-banner-option" src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{owned ? asset.rarity : "Bloqueado"}</small>
+              <img className={`profile-banner-option ${getProfileAnimationClass(asset.animation_type)}`} src={asset.asset_url} alt=""/><b>{asset.name}</b><small>{owned ? asset.rarity + (asset.animation_type !== "none" ? " · Animado" : "") : "Bloqueado"}</small>
             </button>;
           })}
         </div>}

@@ -1550,3 +1550,51 @@ body,
 .monitoring-spin{animation:monitorSpin 1s linear infinite}
 @keyframes monitorSpin{to{transform:rotate(360deg)}}
 @media(max-width:370px){.monitoring-run{grid-template-columns:1fr auto}.monitoring-run-status{justify-self:start}.monitoring-run-copy{grid-column:1/-1;grid-row:2}.monitoring-run>strong{grid-column:2;grid-row:1}}
+
+
+/* Profile avatar frame layout: keep the portrait clipped, never the decoration. */
+.profile-avatar-main,.edit-avatar-preview{position:relative;overflow:visible!important;isolation:isolate}
+.profile-avatar-core{position:absolute;inset:0;z-index:1;display:block;overflow:hidden;border-radius:inherit;isolation:isolate;background:linear-gradient(145deg,#d65bff,#6500db)}
+.profile-avatar-core .avatar-fallback{position:absolute;inset:0;z-index:0;display:grid;place-items:center;border-radius:inherit}
+.profile-avatar img.profile-avatar-photo{position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;max-width:none;object-fit:cover;border-radius:inherit}
+.profile-avatar img.profile-avatar-decoration{position:absolute;z-index:3;display:block;width:128%;height:128%;max-width:none;object-fit:contain;border:0;border-radius:0;pointer-events:none;transform-origin:50% 50%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.22))}
+.profile-avatar .profile-online{z-index:4}
+.decoration-preview{width:62px;height:62px;position:relative;display:grid;place-items:center;overflow:visible;flex:none}
+.decoration-preview img:first-child{position:absolute;left:8px;top:8px;width:46px;height:46px;object-fit:cover;border-radius:13px;z-index:1}
+.profile-asset-option .decoration-preview img.decoration-preview-frame{position:absolute;z-index:2;display:block;width:128%;height:128%;max-width:none;object-fit:contain;border-radius:0;pointer-events:none}
+.profile-selected-banner-preview{overflow:hidden}
+.profile-selected-banner-preview img{display:block;width:100%;height:72px;object-fit:cover;border-radius:8px}
+.profile-selected-banner-preview img.asset-motion-drift{animation:zorviBannerDrift 13s ease-in-out infinite alternate}
+.profile-selected-banner-preview img.asset-motion-twinkle{animation:zorviTwinkle 3.6s ease-in-out infinite}
+.profile-selected-banner-preview img.asset-motion-shimmer{animation:zorviShimmer 3.4s ease-in-out infinite}
+.profile-avatar-photo.asset-motion-float,.profile-asset-option>img.asset-motion-float{animation:zorviFloat 4.8s ease-in-out infinite}
+.profile-avatar-photo.asset-motion-bob,.profile-asset-option>img.asset-motion-bob{animation:zorviBob 3.8s ease-in-out infinite}
+.profile-avatar-photo.asset-motion-pulse,.profile-asset-option>img.asset-motion-pulse{animation:zorviPulse 3.2s ease-in-out infinite}
+.profile-avatar-photo.asset-motion-glow,.profile-asset-option>img.asset-motion-glow{animation:zorviGlow 3.5s ease-in-out infinite}
+.profile-avatar-photo.asset-motion-bounce,.profile-asset-option>img.asset-motion-bounce{animation:zorviBounce 2.8s ease-in-out infinite}
+.profile-avatar-decoration.asset-motion-spin,.decoration-preview-frame.asset-motion-spin{animation:zorviSpin 24s linear infinite}
+.profile-avatar-decoration.asset-motion-orbit,.decoration-preview-frame.asset-motion-orbit{animation:zorviOrbit 18s linear infinite}
+.profile-avatar-decoration.asset-motion-float,.decoration-preview-frame.asset-motion-float{animation:zorviFloat 5.4s ease-in-out infinite}
+.profile-avatar-decoration.asset-motion-pulse,.decoration-preview-frame.asset-motion-pulse{animation:zorviPulse 3.2s ease-in-out infinite}
+.profile-avatar-decoration.asset-motion-glow,.decoration-preview-frame.asset-motion-glow{animation:zorviGlow 3.6s ease-in-out infinite}
+.profile-avatar-decoration.asset-motion-shimmer,.decoration-preview-frame.asset-motion-shimmer{animation:zorviShimmer 3.8s ease-in-out infinite}
+.profile-avatar-decoration.asset-motion-flicker,.decoration-preview-frame.asset-motion-flicker{animation:zorviFlicker 4.2s steps(2,end) infinite}
+.profile-banner.asset-motion-drift{background-size:118% 118%;animation:zorviBannerDrift 18s ease-in-out infinite alternate}
+.profile-banner.asset-motion-twinkle:before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background-image:radial-gradient(#fff 1px,transparent 1.8px),radial-gradient(#c4b5fd 1px,transparent 2px);background-size:39px 39px,67px 67px;background-position:0 0,18px 22px;animation:zorviTwinkle 3.6s ease-in-out infinite}
+.profile-banner.asset-motion-shimmer:before{content:"";position:absolute;inset:-30%;z-index:0;pointer-events:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.18) 48%,transparent 60%);transform:translateX(-55%);animation:zorviBannerShimmer 6s ease-in-out infinite}
+.profile-banner.asset-motion-flicker{animation:zorviBannerFlicker 5s steps(2,end) infinite}
+.profile-banner:after{z-index:1;pointer-events:none}
+@keyframes zorviFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.025)}}
+@keyframes zorviBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(1.4deg)}}
+@keyframes zorviPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+@keyframes zorviGlow{0%,100%{filter:drop-shadow(0 0 2px rgba(167,139,250,.25))}50%{filter:drop-shadow(0 0 10px rgba(103,232,249,.75))}}
+@keyframes zorviBounce{0%,100%{transform:translateY(0) scale(1)}35%{transform:translateY(-5px) scale(1.035)}65%{transform:translateY(0) scale(.985)}}
+@keyframes zorviSpin{to{transform:rotate(360deg)}}
+@keyframes zorviOrbit{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(1.035)}100%{transform:rotate(360deg) scale(1)}}
+@keyframes zorviShimmer{0%,100%{filter:brightness(1) drop-shadow(0 0 2px rgba(250,204,21,.2))}50%{filter:brightness(1.22) drop-shadow(0 0 8px rgba(250,204,21,.6))}}
+@keyframes zorviFlicker{0%,88%,100%{opacity:1;filter:brightness(1)}90%{opacity:.76;filter:brightness(1.35)}94%{opacity:.92;filter:brightness(.9)}}
+@keyframes zorviTwinkle{0%,100%{opacity:.45}50%{opacity:1}}
+@keyframes zorviBannerDrift{from{background-position:44% 50%}to{background-position:58% 50%}}
+@keyframes zorviBannerShimmer{0%,15%{transform:translateX(-65%)}85%,100%{transform:translateX(65%)}}
+@keyframes zorviBannerFlicker{0%,96%,100%{filter:brightness(1)}97%{filter:brightness(1.18)}98%{filter:brightness(.95)}}
+@media(prefers-reduced-motion:reduce){.profile-avatar-photo,.profile-avatar-decoration,.profile-banner,.profile-banner:before,.profile-selected-banner-preview img,.profile-asset-option img,.decoration-preview-frame{animation:none!important;transition:none!important}}
