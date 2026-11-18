@@ -159,8 +159,8 @@ function escapeMapHtml(value:string){const entities:Record<string,string>={"&":"
 function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category">){
   const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
   const slug=store.brand_slug||(name.toLowerCase().includes("drogasil")?"drogasil":name.toLowerCase().includes("globo")?"globo":name.toLowerCase().includes("pague menos")?"pague-menos":"");
-  const initials=slug==="pague-menos"?"PM":slug==="globo"?"G":slug==="drogasil"?"D":slug==="pao-de-acucar"?"P":slug==="atacadao"?"A":slug==="carvalho"?"C":slug==="ferreira"?"F":slug==="mix-atacarejo"?"MIX":name.trim().charAt(0).toUpperCase()||"L";
-  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":slug==="pao-de-acucar"?"#F0B323":slug==="atacadao"?"#E53935":slug==="carvalho"?"#16834A":slug==="ferreira"?"#2873B8":slug==="mix-atacarejo"?"#E58A18":store.category==="Mercado"?"#159A63":store.category==="Restaurante"?"#D97706":"#7200FF";
+  const initials=slug==="pague-menos"?"PM":slug==="globo"?"G":slug==="drogasil"?"D":slug==="pao-de-acucar"?"P":slug==="atacadao"?"A":slug==="carvalho"?"C":slug==="ferreira"?"F":slug==="mix-atacarejo"?"MIX":slug==="sam-s-club"?"SC":slug==="botica"?"B":slug==="armazem-paraiba"?"AP":slug==="pintos"||slug==="pintos-shopping"?"PI":name.trim().charAt(0).toUpperCase()||"L";
+  const color=slug==="drogasil"?"#E52B36":slug==="globo"?"#0B9DD9":slug==="pague-menos"?"#E95B28":slug==="pao-de-acucar"?"#F0B323":slug==="atacadao"?"#E53935":slug==="carvalho"?"#16834A":slug==="ferreira"?"#2873B8":slug==="mix-atacarejo"?"#E58A18":slug==="sam-s-club"?"#1D4ED8":slug==="botica"?"#0D9488":slug==="armazem-paraiba"?"#E11D48":slug==="pintos"||slug==="pintos-shopping"?"#7C3AED":store.category==="Mercado"?"#159A63":store.category==="Restaurante"?"#D97706":"#7200FF";
   return {name,slug,initials,color};
 }
 
@@ -933,6 +933,11 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
   useEffect(() => {
     if (tab === "map") void loadNearbyStores();
   }, [tab, loadNearbyStores]);
+  useEffect(() => {
+    const refreshDirectory = () => { void loadNearbyStores(); };
+    window.addEventListener("zorvi:directory-updated", refreshDirectory);
+    return () => window.removeEventListener("zorvi:directory-updated", refreshDirectory);
+  }, [loadNearbyStores]);
 
 
   const saveCityRegion = async () => {
@@ -1019,8 +1024,27 @@ mapPrice: result ? Number(result.price) : null,
   }, [priceResults]);
   const mapLocatedCount = mapStores.filter(store => store.latitude !== null && store.longitude !== null).length;
   const mapPendingCount = mapStores.length - mapLocatedCount;
-  const mapGoogleVerifiedCount = mapStores.filter(store => store.google_match_status === "verified").length;
-  const mapGooglePendingCount = mapStores.length - mapGoogleVerifiedCount;
+  const mapGooglePendingCount = mapStores.filter(store => store.google_match_status !== "verified").length;
+  const mapBrandCount = new Set(mapStores.map(store =>
+    (store.brand_name || store.name.split(" - ")[0].split(" — ")[0]).trim().toLocaleLowerCase("pt-BR")
+  )).size;
+  const mapCategoryCounts = useMemo(() => {
+    const scoped = stores
+      .filter(store => store.coordinate_source !== "online_catalog")
+      .filter(store => !selectedCity || storeMatchesRegion(store, selectedCity, selectedState))
+      .filter(store => selectedCity || !userLocation || (
+        store.latitude !== null && store.longitude !== null
+        && distanceKm(userLocation.lat, userLocation.lon, store.latitude, store.longitude) <= 20
+      ));
+    return {
+      Todos: scoped.length,
+      Farmácia: scoped.filter(store => store.category === "Farmácia").length,
+      Mercado: scoped.filter(store => store.category === "Mercado").length,
+      Restaurante: scoped.filter(store => store.category === "Restaurante").length,
+      Lojas: scoped.filter(store => store.category === "Lojas").length,
+      Outros: scoped.filter(store => store.category === "Outros").length,
+    };
+  }, [stores, selectedCity, selectedState, userLocation]);
 
   const geocodeStores = useCallback(async (silent = false, mode: "missing" | "verify" = "missing") => {
     if (!supabase || geocodingStores) return;
@@ -1591,7 +1615,7 @@ mapPrice: result ? Number(result.price) : null,
           </form>}
           {!cityFormOpen && selectedCity && <div className="map-region-summary"><span>Buscando em <b>{selectedCity}, {selectedState}</b></span><button onClick={() => setCityFormOpen(true)}>Alterar cidade</button></div>}
           <div className="filter-row map-filter-row" aria-label="Filtrar estabelecimentos">
-            {["Todos","Farmácia","Mercado","Restaurante","Lojas","Outros"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}</button>)}
+            {["Todos","Farmácia","Mercado","Restaurante","Lojas","Outros"].map(f=><button key={f} className={filter===f?"filter-chip selected":"filter-chip"} onClick={()=>{setFilter(f);setSelectedMapStore(null);}}>{f}<span className="map-filter-count">{mapCategoryCounts[f as keyof typeof mapCategoryCounts] ?? 0}</span></button>)}
           </div>
 
           <div className="zorvi-map-frame">
@@ -1619,7 +1643,7 @@ mapPrice: result ? Number(result.price) : null,
             </div>
             <div className="map-sheet-summary">
               <span><b>{mapLocatedCount}</b> no mapa{mapPendingCount > 0 ? " · " + mapPendingCount + " aguardando localização" : " · todos localizados"}</span>
-              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{filter === "Todos" ? "Todas as categorias" : filter} · Google Maps {mapGoogleVerifiedCount}/{mapStores.length} vinculados</span>}
+              {searchPerformed ? <span>Menor preço <b>{bestMapPrice === null ? "não encontrado" : formatMapPrice(bestMapPrice)}</b></span> : <span>{mapBrandCount} marcas e redes · diretório curado</span>}
             </div>
 
             {selectedMapStore && <div className="map-selected-store">
