@@ -14,6 +14,79 @@ const ENDPOINTS = [
   "https://overpass.private.coffee/api/interpreter",
 ];
 
+const KNOWN_BRANDS: Record<string, string[]> = {
+  "Farmácia": [
+    "Drogaria Globo","Pague Menos","Drogasil","Droga Raia","Extrafarma","Drogal",
+    "Pop Farma","Farmácia Roval","Farmafórmula","Pharmapele","DrogaVET",
+  ],
+  "Mercado": [
+    "Atacadão","Assaí","Mix Atacarejo","Mix Mateus","Mateus","Carvalho Super",
+    "Carvalho Supermercados","Pão de Açúcar","Mercadão","Ferreira Supermercados",
+    "Minha Quitandinha",
+  ],
+  "Restaurante": [
+    "Coco Bambu","McDonald's","McDonalds","Burger King","Bob's","Subway","Giraffas",
+    "Pizza Hut","Spoleto","Camarão & Cia","Favorito Comidas Típicas","Fogo Campeiro",
+    "La Brasa Burger","China in Box","Divino Fogão","Croasonho","Oakberry",
+    "Kopenhagen","Milky Moo","Mr. Cheney","Mr. Shake","Griletto","Gendai",
+    "Ital'in House","Companhia do Churrasco","Cheirin Bão","Casa do Pão de Queijo",
+    "Deltaexpresso","Go Coffee","Grão Espresso","Johnny Joy","Açaí Concept",
+    "La Bolaria","Hermanito",
+  ],
+  "Lojas": [
+    "Cacau Show","Óticas Diniz","Óticas Carol","Hering","Aramis","Arezzo","Democrata",
+    "Di Santinni","Levi's","Lupo","Morana","Natura","Mahogany","Imaginarium",
+    "Petland","Petz","World Tennis","Track & Field","Schutz","Osklen","Reserva",
+    "Puket","Milon","Bibi","Anacapri","Constance","Mundo Verde","Centauro",
+    "Riachuelo","Renner","C&A","Americanas","Magazine Luiza","Casas Bahia",
+    "Lojas Avenida","Le Biscuit","Realme","Phone Store","Kings Sneakers",
+    "Livraria Nobel","Mercadão dos Óculos","Sergio's","HOPE","Morena Rosa",
+    "Lez a Lez","LIVE!","Dress To","Ophicina","Sonho dos Pés","Container Baby & Kids",
+    "Anjos Colchões e Sofás","Conserta Smart","Muniz Auto Center",
+  ],
+  "Outros": [
+    "Coife Odonto","Dentebras","OdontoCompany","Oral Sin","OrthoDontic","Sorridents",
+    "Sorrifácil","Sabin","Bioanálise","Med Imagem","Unimed","Neoclínica",
+    "Hospital São Marcos","Hospital Primavera","Hospital Unimed","Hospital Santa Maria",
+    "Hospital de Olhos","Teresina Shopping","Shopping Rio Poty","Riverside Shopping",
+    "Shopping da Cidade","Selfit","SkyFit","Smart Fit","Engenharia do Corpo",
+    "Maple Bear","Wizard","Cultura Inglesa","Yázigi","Grau Técnico",
+    "Instituto Embelleze","Instituto Mix","Instituto Trata","Instituto Visão Solidária",
+    "Lavanderia 60 Minutos","5àsec","Lavô","Lavateria","Lavblue","Jadlog","RE/MAX",
+    "Mestre da Obra","Truly Nolen","Royal Face","Espaçolaser","Depyl Action",
+    "Sobrancelhas Design","Studio Velocity","VOLL Pilates","Petland","Petz",
+    "Banco do Brasil","Caixa Econômica Federal","Bradesco","Santander","Itaú",
+    "Banco do Nordeste","Shell","Ipiranga","Petrobras","Acuidar","Botoclinic",
+    "Face Doctor","Emagrecentro","Turquesa Beleza","Visão Total","Wise Up",
+    "Prepara IA","LocarX","LocExpress",
+  ],
+};
+
+function isKnownEstablishment(row: {
+  name: string;
+  brand_name: string | null;
+  category: string;
+  osm_tags?: Record<string, string>;
+}): boolean {
+  const allowed = KNOWN_BRANDS[row.category] || [];
+  const candidates = [
+    row.name,
+    row.brand_name,
+    row.osm_tags?.brand,
+    row.osm_tags?.operator,
+    row.osm_tags?.network,
+  ].map(normalize).filter(Boolean);
+
+  return allowed.some((brand) => {
+    const term = normalize(brand);
+    if (term.length < 3) return false;
+    return candidates.some((candidate) =>
+      candidate === term || candidate.includes(term)
+    );
+  });
+}
+
+
 const OVERPASS_QUERY = String.raw`[out:json][timeout:45];
 area["name"="Teresina"]["boundary"="administrative"]["admin_level"~"^(7|8)$"]->.city;
 (
@@ -206,6 +279,7 @@ function toStore(element: OsmElement, now: string) {
     geocoded_at: now,
     osm_last_seen_at: now,
     osm_tags: allowedTags,
+    map_visibility: true,
   };
 }
 
@@ -269,9 +343,10 @@ async function main(request: Request) {
 
   try {
     const { elements, endpoint } = await fetchOverpass();
-    const mapped = elements
+    const namedCandidates = elements
       .map((element) => toStore(element, now))
       .filter((row): row is NonNullable<ReturnType<typeof toStore>> => row !== null);
+    const mapped = namedCandidates.filter(isKnownEstablishment);
     const unique = new Map<string, typeof mapped[number]>();
     for (const row of mapped) unique.set(row.osm_type + ":" + row.osm_id, row);
     const rows = [...unique.values()];
@@ -287,6 +362,8 @@ async function main(request: Request) {
         state: STATE,
         endpoint,
         rawElements: elements.length,
+        namedCandidates: namedCandidates.length,
+        excludedUnrecognized: namedCandidates.length - rows.length,
         namedEstablishments: rows.length,
         byCategory,
         sample: rows.slice(0, 18).map((row) => ({
@@ -314,6 +391,7 @@ async function main(request: Request) {
         const patch: Record<string, unknown> = {
           osm_last_seen_at: now,
           osm_tags: row.osm_tags,
+          map_visibility: true,
         };
         if ((alreadyLinked.latitude === null || alreadyLinked.longitude === null)
           && alreadyLinked.coordinate_source !== "online_catalog") {
@@ -347,6 +425,7 @@ async function main(request: Request) {
           osm_id: row.osm_id,
           osm_last_seen_at: now,
           osm_tags: row.osm_tags,
+          map_visibility: true,
         };
         if ((match.latitude === null || match.longitude === null) && match.coordinate_source !== "online_catalog") {
           patch.latitude = row.latitude;
