@@ -10,21 +10,20 @@ const CITY = "Teresina";
 const STATE = "PI";
 const SOURCE_LABEL = "OpenStreetMap contributors · ODbL";
 const ENDPOINTS = [
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter",
   "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
 ];
 
-const OVERPASS_QUERY = String.raw`[out:json][timeout:120];
+const OVERPASS_QUERY = String.raw`[out:json][timeout:45];
 area["name"="Teresina"]["boundary"="administrative"]["admin_level"~"^(7|8)$"]->.city;
 (
-  nwr["shop"](area.city);
-  nwr["office"](area.city);
-  nwr["craft"](area.city);
-  nwr["healthcare"](area.city);
-  nwr["amenity"~"^(pharmacy|restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|marketplace|fuel|bank|atm|hospital|clinic|doctors|dentist|veterinary|car_wash|car_repair|car_rental|post_office|school|university|library|cinema|theatre|place_of_worship|social_facility|community_centre)$"](area.city);
-  nwr["tourism"~"^(hotel|hostel|guest_house|museum|attraction|gallery)$"](area.city);
-  nwr["leisure"~"^(fitness_centre|sports_centre|swimming_pool)$"](area.city);
+  nwr["shop"]["name"](area.city);
+  nwr["office"]["name"](area.city);
+  nwr["craft"]["name"](area.city);
+  nwr["healthcare"]["name"](area.city);
+  nwr["amenity"~"^(pharmacy|restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|marketplace|fuel|bank|atm|hospital|clinic|doctors|dentist|veterinary|car_wash|car_repair|car_rental|post_office|school|university|library|cinema|theatre|place_of_worship|social_facility|community_centre)$"]["name"](area.city);
+  nwr["tourism"~"^(hotel|hostel|guest_house|museum|attraction|gallery)$"]["name"](area.city);
+  nwr["leisure"~"^(fitness_centre|sports_centre|swimming_pool)$"]["name"](area.city);
 );
 out center tags;`;
 
@@ -107,7 +106,7 @@ async function fetchOverpass(): Promise<{ elements: OsmElement[]; endpoint: stri
           "User-Agent": "ZORVI/1.0 (Teresina business directory; OpenStreetMap ODbL attribution)",
         },
         body: "data=" + encodeURIComponent(OVERPASS_QUERY),
-        signal: AbortSignal.timeout(132000),
+        signal: AbortSignal.timeout(50000),
       });
       if (!response.ok) {
         const detail = (await response.text().catch(() => "")).slice(0, 220);
