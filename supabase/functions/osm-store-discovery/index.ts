@@ -87,18 +87,20 @@ function isKnownEstablishment(row: {
 }
 
 
-const OVERPASS_QUERY = String.raw`[out:json][timeout:45];
-area["name"="Teresina"]["boundary"="administrative"]["admin_level"~"^(7|8)$"]->.city;
-(
-  nwr["shop"]["name"](area.city);
-  nwr["office"]["name"](area.city);
-  nwr["craft"]["name"](area.city);
-  nwr["healthcare"]["name"](area.city);
-  nwr["amenity"~"^(pharmacy|restaurant|cafe|fast_food|food_court|bar|pub|ice_cream|marketplace|fuel|bank|atm|hospital|clinic|doctors|dentist|veterinary|car_wash|car_repair|car_rental|post_office|school|university|library|cinema|theatre|place_of_worship|social_facility|community_centre)$"]["name"](area.city);
-  nwr["tourism"~"^(hotel|hostel|guest_house|museum|attraction|gallery)$"]["name"](area.city);
-  nwr["leisure"~"^(fitness_centre|sports_centre|swimming_pool)$"]["name"](area.city);
-);
-out center tags qt;`;
+const KNOWN_BRAND_PATTERN = [...new Set(Object.values(KNOWN_BRANDS).flat())]
+  .map((brand) => brand.replace(/\./g, "\\." ))
+  .join("|");
+
+const OVERPASS_QUERY = [
+  '[out:json][timeout:45];',
+  'area["name"="Teresina"]["boundary"="administrative"]["admin_level"~"^(7|8)$"]->.city;',
+  '(',
+  'nwr["name"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
+  'nwr["brand"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
+  'nwr["operator"~"(?i)(' + KNOWN_BRAND_PATTERN + ')"](area.city);',
+  ');',
+  'out center tags qt;',
+].join("\\n");
 
 type OsmElement = {
   type: "node" | "way" | "relation";
@@ -207,6 +209,7 @@ function getCategory(tags: Record<string, string>): string | null {
   const shop = normalize(tags.shop);
   const amenity = normalize(tags.amenity);
   const healthcare = normalize(tags.healthcare);
+  if (shop === "mall") return "Outros";
   if (amenity === "pharmacy" || healthcare === "pharmacy" || shop === "chemist") return "Farmácia";
   if (["supermarket","convenience","grocery","greengrocer","wholesale","butcher","bakery","deli","food","beverages","frozen food","seafood","confectionery","alcohol","farm"].includes(shop)
     || amenity === "marketplace") return "Mercado";
@@ -252,7 +255,7 @@ function toStore(element: OsmElement, now: string) {
   const allowedTags: Record<string, string> = {};
   for (const key of [
     "name","brand","operator","shop","amenity","office","craft","healthcare","tourism","leisure",
-    "addr:street","addr:housenumber","addr:suburb","addr:neighbourhood","addr:postcode","website",
+    "addr:street","addr:housenumber","addr:suburb","addr:neighbourhood","addr:postcode","website","network",
   ]) {
     if (tags[key]) allowedTags[key] = String(tags[key]).slice(0, 180);
   }
