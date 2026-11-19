@@ -1241,7 +1241,7 @@ mapPrice: result ? Number(result.price) : null,
         return;
       }
 
-      if (uniqueProducts.length === 1) {
+      if (uniqueProducts.length === 1 && Number(uniqueProducts[0].available_store_count || 0) > 0) {
         await loadPricesForProduct(uniqueProducts[0]);
         return;
       }
