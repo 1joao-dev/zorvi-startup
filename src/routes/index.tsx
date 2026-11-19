@@ -20,7 +20,7 @@ type FeedPost = { id: string; user_id: string; content: string; image_url: strin
 type FeedComment = { id: string; content: string; created_at: string; user_id: string; author: UserProfile | null };
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null; source_url:string|null; source_label:string|null; osm_type:string|null; osm_id:number|null; osm_last_seen_at:string|null };
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
-type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
+type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceScope?:"store"|"network_online"|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
 type CatalogProduct = {
   id:string;
   name:string;
@@ -168,6 +168,16 @@ function getDecorationFitStyle(asset:ProfileAsset|null):CSSProperties{
   return {top:"-14%",left:"-14%",width:"128%",height:"128%",objectFit:"contain",...(asset ? defaults[asset.slug] || {} : {}),...(asset?.fit_config || {})};
 }
 function getMapPriceLabel(priceType:string|null|undefined){if(priceType==="estimated") return "Estimativa";if(priceType==="official_site") return "Preço publicado no site oficial";if(priceType==="community_report") return "Relato da comunidade validado";if(priceType==="in_store") return "Preço informado em loja";return "Preço verificado";}
+function getStoreNetworkKey(store:Pick<Store,"brand_slug"|"brand_name"|"name">){
+  const slug=(store.brand_slug||"").toLowerCase().trim();
+  const aliases:Record<string,string>={"carvalho-supershop":"carvalho","ferreira-em-casa":"ferreira"};
+  if(slug)return aliases[slug]||slug;
+  const name=(store.brand_name||store.name).toLowerCase();
+  if(name.includes("atacad"))return "atacadao";
+  if(name.includes("carvalho"))return "carvalho";
+  if(name.includes("ferreira"))return "ferreira";
+  return name.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+}
 function escapeMapHtml(value:string){const entities:Record<string,string>={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};return value.replace(/[&<>"']/g,char=>entities[char]||char);}
 function getStoreBrand(store:Pick<Store,"name"|"brand_name"|"brand_slug"|"category">){
   const name=store.brand_name||store.name.split(" - ")[0].split(" — ")[0];
@@ -1005,17 +1015,27 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
     const relevantStores = nearbyStores.filter(store => !searchPerformed || !searchProductCategory || store.category === searchProductCategory);
     if (!searchPerformed) return relevantStores;
     const bestByStore = new Map<string,PriceResult>();
+    const bestOnlineByNetwork = new Map<string,PriceResult>();
     priceResults.forEach(result => {
       if (result.is_stale) return;
+      if (result.is_online) {
+        const networkKey = getStoreNetworkKey(result.store);
+        const current = bestOnlineByNetwork.get(networkKey);
+        if (!current || Number(result.price) < Number(current.price)) bestOnlineByNetwork.set(networkKey,result);
+        return;
+      }
       const current = bestByStore.get(result.store.id);
       if (!current || Number(result.price) < Number(current.price)) bestByStore.set(result.store.id,result);
     });
     return relevantStores.map(store => {
-      const result = bestByStore.get(store.id);
+      const physicalResult = bestByStore.get(store.id);
+      const onlineNetworkResult = physicalResult ? null : bestOnlineByNetwork.get(getStoreNetworkKey(store));
+      const result = physicalResult || onlineNetworkResult;
       return {
         ...store,
-mapPrice: result ? Number(result.price) : null,
+        mapPrice: result ? Number(result.price) : null,
         mapPriceType: result?.price_type || null,
+        mapPriceScope: physicalResult ? "store" as const : onlineNetworkResult ? "network_online" as const : null,
         mapPriceObservedAt: result?.observed_at || null,
         mapPriceSource: result?.source_label || null,
         mapProductLabel: result ? [result.product.name,result.product.variant].filter(Boolean).join(" · ") : null,
@@ -1491,7 +1511,7 @@ mapPrice: result ? Number(result.price) : null,
       const selectedClass = selectedMapStore?.id === store.id ? " is-selected" : "";
       const markerHtml = `<div class="zorvi-map-marker${searchPerformed ? " with-price" : ""}${selectedClass}" style="--brand-accent:${brand.color}">
         <span class="zorvi-map-marker-symbol"><b>${escapeMapHtml(brand.initials)}</b>${logoMarkup}</span>
-        ${searchPerformed ? `<span class="zorvi-map-marker-price ${hasPrice ? "is-price" : "no-price"}">${hasPrice ? `${store.mapPriceType === "estimated" ? "≈ " : ""}${formatMapPrice(store.mapPrice as number)}` : "Sem preço"}</span>` : ""}
+        ${searchPerformed ? `<span class="zorvi-map-marker-price ${hasPrice ? "is-price" : "no-price"}">${hasPrice ? `${store.mapPriceScope === "network_online" ? "WEB " : ""}${store.mapPriceType === "estimated" ? "≈ " : ""}${formatMapPrice(store.mapPrice as number)}` : "Sem preço"}</span>` : ""}
       </div>`;
       const icon = leaflet.divIcon({
         className: "zorvi-leaflet-icon",
@@ -1502,7 +1522,7 @@ mapPrice: result ? Number(result.price) : null,
       });
       const marker = leaflet.marker([store.latitude, store.longitude], { icon, zIndexOffset: 500 }).addTo(markerLayer);
       const priceMarkup = hasPrice
-        ? `<strong class="zorvi-popup-price">${getMapPriceLabel(store.mapPriceType)} · ${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
+        ? `<strong class="zorvi-popup-price">${store.mapPriceScope === "network_online" ? "Preço online da rede · não confirmado nesta unidade" : getMapPriceLabel(store.mapPriceType)} · ${formatMapPrice(store.mapPrice as number)}</strong><small>${escapeMapHtml(store.mapProductLabel || query)}</small>`
         : searchPerformed ? '<strong class="zorvi-popup-no-price">Preço não confirmado</strong>' : "";
       const coordinateMarkup = store.google_match_status === "verified"
         ? "<small>Referência do Google Maps vinculada</small>"
@@ -1658,7 +1678,7 @@ mapPrice: result ? Number(result.price) : null,
               <div className="place-info">
                 <b>{selectedMapStore.brand_name||selectedMapStore.name}</b>
                 <small>{selectedMapStore.address} · {selectedMapStore.city}</small>
-                {typeof selectedMapStore.mapPrice==="number" ? <strong>{getMapPriceLabel(selectedMapStore.mapPriceType)} · {formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null ? (selectedMapStore.latitude!==null && selectedMapStore.longitude!==null ? "Coordenadas cadastradas" : "Localização pendente") : selectedMapStore.distance.toFixed(1) + (userLocation?.precision==="city" && selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
+                {typeof selectedMapStore.mapPrice==="number" ? <strong>{selectedMapStore.mapPriceScope === "network_online" ? "Preço online da rede · não confirmado nesta unidade" : getMapPriceLabel(selectedMapStore.mapPriceType)} · {formatMapPrice(selectedMapStore.mapPrice)}</strong> : searchPerformed ? <small>Preço ainda não confirmado para esta unidade.</small> : <small>{selectedMapStore.distance===null ? (selectedMapStore.latitude!==null && selectedMapStore.longitude!==null ? "Coordenadas cadastradas" : "Localização pendente") : selectedMapStore.distance.toFixed(1) + (userLocation?.precision==="city" && selectedCity ? " km do centro de " + selectedCity : " km de você")}</small>}
                 {selectedMapStore.google_match_status === "verified" && <small>Referência do Google Maps vinculada</small>}
               </div>
               <div className="map-selected-actions">
@@ -1675,14 +1695,14 @@ mapPrice: result ? Number(result.price) : null,
                 const brand=getStoreBrand(store);
                 const logoUrl=getStoreBrandLogo(store);
                 const distanceLabel=store.latitude===null||store.longitude===null?"Coordenada pendente":store.distance===null?"Coordenadas cadastradas":(userLocation?.precision==="approximate"||userLocation?.precision==="city"?"≈ ":"")+(store.distance<1?Math.round(store.distance*1000)+" m":store.distance.toFixed(1)+" km");
-                const metric=typeof store.mapPrice==="number"?(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
+                const metric=typeof store.mapPrice==="number"?(store.mapPriceScope==="network_online"?"WEB ":"")+(store.mapPriceType==="estimated"?"≈ ":"")+formatMapPrice(store.mapPrice):searchPerformed?"Sem preço confirmado":distanceLabel;
                 return <button type="button" className={"map-store-row"+(selectedMapStore?.id===store.id?" is-selected":"")} key={store.id} onClick={()=>{
                   setSelectedMapStore(store);
                   setMapSheetExpanded(true);
                   if(store.latitude!==null&&store.longitude!==null)leafletMapRef.current?.setView([store.latitude,store.longitude],16);
                 }}>
                   <span className="store-brand-mini" style={{"--brand-accent":brand.color} as CSSProperties}><b>{brand.initials}</b>{logoUrl&&<img src={logoUrl} alt="" onError={event=>event.currentTarget.remove()}/>}</span>
-                  <span className="place-info"><b>{store.brand_name||store.name}</b><small>{store.address} · {store.city}</small></span>
+                  <span className="place-info"><b>{store.brand_name||store.name}</b><small>{store.address} · {store.city}</small>{store.mapPriceScope==="network_online"&&<small className="map-network-price-note">Preço do site da rede; não confirmado nesta unidade</small>}</span>
                   <span className="map-store-metric">{metric}</span>
                   <ArrowRight size={15}/>
                 </button>;
@@ -1730,7 +1750,33 @@ mapPrice: result ? Number(result.price) : null,
               <div className="comparison-summary-savings"><small>ECONOMIA POSSÍVEL</small><strong>{comparisonStats.freshCount > 1 ? formatMapPrice(comparisonStats.savings) : "—"}</strong><span>{comparisonStats.freshCount > 1 ? comparisonStats.savingsPercent.toFixed(2).replace(".",",") + "% comparado ao maior preço recente" : "Compare pelo menos duas lojas"}</span></div>
               <p>{comparisonStats.freshCount} estabelecimento(s) com preço atualizado. Preços com mais de 7 dias aparecem abaixo como antigos e não definem o menor preço.</p>
             </div>
-            {priceResults.map(r=><div className={"price-result-row" + (r.is_stale ? " is-stale" : "")} key={r.id}><div className="place-info"><b>{r.store.name}</b><small>{r.is_online ? "Canal online" : "Loja física"} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : r.price_type === "community_report" ? "relato comunitário validado" : "preço informado em loja"} · {r.source_label}</small><small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.is_stale ? "Preço antigo — confirme antes de comprar" : r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small></div><strong>{formatMapPrice(Number(r.price))}</strong>{r.source_url&&<a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}</div>)}
+            {priceResults.map(r=>{
+              const relatedBranches = r.is_online
+                ? nearbyStores.filter(branch => branch.category === r.store.category && getStoreNetworkKey(branch) === getStoreNetworkKey(r.store))
+                : [];
+              const physicalAddress = [r.store.address,r.store.city,r.store.state].filter(Boolean).join(" · ");
+              const storeMapUrl = r.store.latitude !== null && r.store.longitude !== null
+                ? `https://www.google.com/maps/dir/?api=1&destination=${r.store.latitude},${r.store.longitude}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([r.store.name,r.store.address,r.store.city,r.store.state].filter(Boolean).join(", "))}`;
+              return <div className={"price-result-row" + (r.is_stale ? " is-stale" : "")} key={r.id}>
+                <div className="place-info">
+                  <b>{r.store.name}</b>
+                  <small>{r.is_online ? "Canal online regionalizado" : "Loja física"} · {r.price_type === "estimated" ? "estimativa baseada na fonte" : r.price_type === "official_site" ? "preço do site" : r.price_type === "community_report" ? "relato comunitário validado" : "preço informado em loja"} · {r.source_label}</small>
+                  <small className="price-result-address"><MapPin size={12}/>{r.is_online ? `Oferta para ${r.store.city}, ${r.store.state}; sem endereço de filial física vinculado a este preço.` : physicalAddress || "Endereço não cadastrado"}</small>
+                  {r.is_online && <div className="price-result-branches">
+                    <small>Unidades físicas da rede na região — preço e estoque em loja não confirmados:</small>
+                    {relatedBranches.length > 0
+                      ? relatedBranches.map(branch=><a key={branch.id} href={branch.latitude !== null && branch.longitude !== null ? `https://www.google.com/maps/dir/?api=1&destination=${branch.latitude},${branch.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([branch.name,branch.address,branch.city,branch.state].filter(Boolean).join(", "))}`} target="_blank" rel="noreferrer"><MapPin size={11}/><span>{branch.name} · {branch.address}, {branch.city}</span><b>Ver rota</b></a>)
+                      : <small>Nenhuma unidade física desta rede foi encontrada na região selecionada.</small>}
+                  </div>}
+                  <small>Atualizado em {new Date(r.observed_at).toLocaleString("pt-BR")} · {r.is_stale ? "Preço antigo — confirme antes de comprar" : r.availability_status === "available" ? "disponibilidade indicada pela fonte" : "estoque não confirmado"}</small>
+                </div>
+                <strong>{formatMapPrice(Number(r.price))}</strong>
+                {r.is_online && r.store.website_url && <a href={r.store.website_url} target="_blank" rel="noreferrer">Loja</a>}
+                {!r.is_online && <a href={storeMapUrl} target="_blank" rel="noreferrer">Rota</a>}
+                {r.source_url && <a href={r.source_url} target="_blank" rel="noreferrer">Fonte</a>}
+              </div>;
+            })}
             {priceHistory.length > 0 && <div className="price-history">
               <button type="button" className="price-history-toggle" onClick={() => setHistoryExpanded((open) => !open)}><span><small>HISTÓRICO DE PREÇOS</small><b>{priceHistory.length} registro(s) nos últimos 90 dias</b><em>Veja quando o preço mudou em cada estabelecimento.</em></span><ArrowRight size={17} className={historyExpanded ? "expanded" : ""}/></button>
               {historyExpanded && <div className="price-history-list">{priceHistory.slice(0,16).map((item) => <div className="price-history-row" key={item.id}><span><b>{item.store_name}</b><small>{item.is_online ? "Online" : "Loja física"} · {new Date(item.observed_at).toLocaleString("pt-BR")}</small></span><strong>{formatMapPrice(Number(item.price))}</strong></div>)}</div>}
