@@ -1310,6 +1310,23 @@ body,
   color:var(--muted);
   font-size:9px;
 }
+.map-product-candidate .map-product-candidate-price{
+  display:inline-flex;
+  align-self:flex-start;
+  margin-top:2px;
+  padding:4px 7px;
+  border:1px solid var(--line);
+  border-radius:7px;
+  background:var(--surface2);
+  font-size:8px;
+  line-height:1.25;
+}
+.map-product-candidate .map-product-candidate-price.is-available{
+  border-color:#22c55e55;
+  background:#16a34a14;
+  color:#86d69a;
+  font-weight:800;
+}
 .map-product-candidate svg{
   flex:none;
   color:#c49aff;
