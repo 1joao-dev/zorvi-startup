@@ -21,7 +21,20 @@ type FeedComment = { id: string; content: string; created_at: string; user_id: s
 type Store = { id:string; name:string; category:string; address:string; city:string; state:string; latitude:number|null; longitude:number|null; website_url:string|null; brand_name:string|null; brand_slug:string|null; brand_logo_url:string|null; coordinate_precision:string|null; coordinate_source:string|null; geocoded_at:string|null; geocode_attempted_at:string|null; google_place_id:string|null; google_match_status:string|null; google_checked_at:string|null; google_verified_at:string|null; source_url:string|null; source_label:string|null; osm_type:string|null; osm_id:number|null; osm_last_seen_at:string|null };
 type UserLocation = { lat:number; lon:number; accuracy:number|null; precision:"precise"|"approximate"|"manual"|"city" };
 type MapStore = Store & { distance:number|null; mapPrice?:number|null; mapPriceType?:string|null; mapPriceObservedAt?:string|null; mapPriceSource?:string|null; mapProductLabel?:string|null };
-type CatalogProduct = { id:string; name:string; normalized_name:string; brand:string|null; variant:string|null; unit:string|null; category:string };
+type CatalogProduct = {
+  id:string;
+  name:string;
+  normalized_name:string;
+  brand:string|null;
+  variant:string|null;
+  unit:string|null;
+  category:string;
+  available_store_count?:number;
+  tracked_store_count?:number;
+  lowest_price?:number|string|null;
+  highest_price?:number|string|null;
+  last_price_at?:string|null;
+};
 type PriceResult = { id:string; price:number; price_type:string; source_url:string|null; source_label:string; observed_at:string; availability_status:string; is_online:boolean; is_stale:boolean; age_hours:number; store:Store; product:{id:string;name:string;brand:string|null;variant:string|null;unit:string|null;category:string} };
 type ChatPriceResult = { id:string; productName:string; brand:string|null; variant:string|null; unit:string|null; storeName:string; storeAddress:string; storeCity:string; storeState:string; isOnline:boolean; price:number; currency:string; priceType:string; sourceLabel:string; sourceUrl:string|null; observedAt:string; availabilityStatus:"available"|"unknown"; distanceKm:number|null };
 type ChatMessage = { role:"assistant"|"user"; text:string; results?:ChatPriceResult[] };
@@ -1211,18 +1224,12 @@ mapPrice: result ? Number(result.price) : null,
     setSelectedPriceProduct(null);
     setSearchProductCategory(null);
     try {
-      const barcode = query.trim().replace(/\D/g, "");
-      const isBarcode = /^\d{8,14}$/.test(barcode);
-      const { data, error } = isBarcode
-        ? await supabase.from("products")
-          .select("id,name,normalized_name,brand,variant,unit,category")
-          .eq("barcode", barcode)
-          .eq("is_active", true)
-          .limit(10)
-        : await supabase.rpc("search_product_catalog", {
-          search_query: query.trim(),
-          result_limit: 12,
-        });
+      const { data, error } = await supabase.rpc("search_comparable_products", {
+        search_query: query.trim(),
+        result_limit: 12,
+        city_filter: selectedCity || null,
+        state_filter: selectedState || null,
+      });
       if (error) throw error;
 
       const uniqueProducts = Array.from(new Map<string, CatalogProduct>(
@@ -1695,11 +1702,26 @@ mapPrice: result ? Number(result.price) : null,
           </section>
 
           {searchPerformed&&searchCandidates.length>0&&<div className="price-results map-product-candidates">
-            <div className="nearby-head"><div><p className="eyebrow">CONFIRME O PRODUTO</p><h2>Encontramos {searchCandidates.length} opções</h2><small>Escolha a marca e a apresentação exatas para não comparar produtos diferentes.</small></div></div>
-            {searchCandidates.map(product=><button type="button" className="map-product-candidate" key={product.id} onClick={()=>void choosePriceProduct(product)}>
-              <span><b>{product.name}</b><small>{[product.brand,product.variant,product.unit].filter(Boolean).join(" · ") || product.category}</small></span>
-              <ArrowRight size={16}/>
-            </button>)}
+            <div className="nearby-head"><div><p className="eyebrow">PRODUTOS COM PREÇOS REAIS</p><h2>Encontramos {searchCandidates.length} opções</h2><small>Os produtos com preços disponíveis aparecem primeiro. Confira a apresentação antes de comparar.</small></div></div>
+            {searchCandidates.map(product=>{
+              const availableStores = Number(product.available_store_count || 0);
+              const trackedStores = Number(product.tracked_store_count || 0);
+              const lowestPrice = product.lowest_price === null || product.lowest_price === undefined ? null : Number(product.lowest_price);
+              return <button type="button" className="map-product-candidate" key={product.id} onClick={()=>void choosePriceProduct(product)}>
+                <span>
+                  <b>{product.name}</b>
+                  <small>{[product.brand,product.variant,product.unit].filter(Boolean).join(" · ") || product.category}</small>
+                  <small className={availableStores > 0 && lowestPrice !== null ? "map-product-candidate-price is-available" : "map-product-candidate-price"}>
+                    {availableStores > 0 && lowestPrice !== null
+                      ? availableStores + (availableStores === 1 ? " loja com preço atualizado" : " lojas com preços atualizados") + " · desde " + formatMapPrice(lowestPrice)
+                      : trackedStores > 0
+                        ? trackedStores + (trackedStores === 1 ? " loja com preço antigo" : " lojas com preços antigos") + " · confirme antes de comprar"
+                        : "Sem preço verificado nesta região"}
+                  </small>
+                </span>
+                <ArrowRight size={16}/>
+              </button>;
+            })}
           </div>}
           {searchPerformed&&selectedPriceProduct&&<div className="price-results map-price-results">
             <div className="nearby-head"><div><p className="eyebrow">COMPARAÇÃO DE PREÇOS</p><h2>{priceResults.length} estabelecimentos encontrados</h2><small>{selectedPriceProduct.name}{selectedPriceProduct.variant?" · "+selectedPriceProduct.variant:""}</small></div><button type="button" className="price-report-trigger" onClick={()=>openPriceReport()}>Informar preço</button></div>
