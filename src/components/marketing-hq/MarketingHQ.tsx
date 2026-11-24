@@ -254,7 +254,7 @@ function TaskDetail({ id, data, run, back }: { id: string; data: MhqData; run: R
   const creatives = data.creatives.filter((c) => text(c, "task_id") === id).sort((a, b) => Number(pick(b, "version") ?? 0) - Number(pick(a, "version") ?? 0));
   const approvals = data.approvals.filter((a) => text(a, "task_id") === id);
   const err = text(task, "error_message", "error", "last_error");
-  const brief = pick(task, "brief");
+  const brief = pick(task, "brief_json", "brief");
   return (
     <div className="mhq-grid">
       <button className="mhq-link" onClick={back}><ArrowLeft size={15} /> Voltar ao quadro</button>
@@ -276,7 +276,7 @@ function TaskDetail({ id, data, run, back }: { id: string; data: MhqData; run: R
           <ol className="mhq-steps">{steps.map((s, i) => (
             <li key={s.id}>
               <span className="mhq-step-n">{i + 1}</span>
-              <div><b>{text(s, "agent_role", "agent_key", "agent", "role", "name", "step") || "Etapa"}</b>
+              <div><b>{text(s, "step_key", "agent_role", "agent_key", "agent", "role", "name", "step") || "Etapa"}</b>
                 <small>Início {fmtDate(pick(s, "started_at", "created_at"))} · Fim {fmtDate(pick(s, "completed_at", "finished_at"))}{pick(s, "attempt", "attempts") !== undefined ? ` · Tentativa ${text(s, "attempt", "attempts")}` : ""}</small>
                 {text(s, "error_message", "error") && <small className="mhq-err">{text(s, "error_message", "error")}</small>}
               </div>
@@ -291,7 +291,7 @@ function TaskDetail({ id, data, run, back }: { id: string; data: MhqData; run: R
           <article key={c.id} className="mhq-version">
             <div className="mhq-head"><b>v{text(c, "version") || "?"} · {text(c, "kind", "type", "stage", "agent_role") || "criativo"}</b><small>{fmtDate(pick(c, "created_at"))}</small></div>
             <Hash value={text(c, "content_hash", "hash")} />
-            <Content value={pick(c, "content", "body", "final_package", "payload")} />
+            <Content value={pick(c, "content_json", "content", "body", "final_package", "payload")} />
           </article>))}
       </section>
       {approvals.length > 0 && <section className="mhq-card"><h2>Aprovações</h2>{approvals.map((a) => <ApprovalCard key={a.id} a={a} data={data} run={run} />)}</section>}
@@ -341,9 +341,9 @@ function ApprovalCard({ a, data, run, openTask }: { a: Row; data: MhqData; run: 
       <Hash value={text(a, "content_hash") || text(creative, "content_hash", "hash")} />
       {creative && text(a, "content_hash") && text(creative, "content_hash") && text(a, "content_hash") !== text(creative, "content_hash") &&
         <p className="mhq-alert">O conteúdo não corresponde ao hash aprovado. Esta aprovação não é válida.</p>}
-      <p className="mhq-muted">Solicitada {fmtDate(pick(a, "created_at"))}{pick(a, "decided_at") ? ` · Decidida ${fmtDate(pick(a, "decided_at"))}` : ""}</p>
-      <details className="mhq-details" open={pending}><summary>Pacote final exato</summary><Content value={pick(creative, "content", "body", "final_package", "payload") ?? pick(a, "package", "snapshot")} /></details>
-      {text(a, "note", "decision_note") && <p className="mhq-muted">Nota: {text(a, "note", "decision_note")}</p>}
+      <p className="mhq-muted">Solicitada {fmtDate(pick(a, "requested_at", "created_at"))}{pick(a, "decided_at") ? ` · Decidida ${fmtDate(pick(a, "decided_at"))}` : ""}</p>
+      <details className="mhq-details" open={pending}><summary>Pacote final exato</summary><Content value={pick(creative, "content_json", "content", "body", "final_package", "payload") ?? pick(a, "action_payload", "package", "snapshot")} /></details>
+      {text(a, "decision_note", "note") && <p className="mhq-muted">Nota: {text(a, "note", "decision_note")}</p>}
       {openTask && task && <button className="mhq-link" onClick={() => openTask(task.id)}>Ver tarefa completa</button>}
       {pending && (
         <div className="mhq-form">
@@ -374,7 +374,7 @@ function Approvals({ data, errors, run, openTask }: { data: MhqData; errors: Mhq
 }
 
 function Knowledge({ data, errors, run }: { data: MhqData; errors: MhqErrors; run: Run }) {
-  const [form, setForm] = useState({ title: "", content: "", scope: "brand", kind: "guideline" });
+  const [form, setForm] = useState({ title: "", content: "", scope: "global", kind: "guideline" });
   const [busy, setBusy] = useState(false);
   const pending = data.knowledge.filter(isKnowledgePending);
   const approved = data.knowledge.filter(isKnowledgeApproved);
@@ -395,8 +395,8 @@ function Knowledge({ data, errors, run }: { data: MhqData; errors: MhqErrors; ru
           <label className="mhq-field"><span>Título</span><input maxLength={140} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
           <label className="mhq-field"><span>Conteúdo</span><textarea rows={3} maxLength={4000} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></label>
           <div className="mhq-row">
-            <label className="mhq-field"><span>Escopo</span><select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="brand">Marca</option><option value="copywriter">Copywriter</option><option value="reviewer">Revisor</option><option value="global">Geral</option></select></label>
-            <label className="mhq-field"><span>Tipo</span><select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}><option value="guideline">Diretriz</option><option value="fact">Fato</option><option value="style">Estilo</option><option value="restriction">Restrição</option></select></label>
+            <label className="mhq-field"><span>Escopo</span><select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="global">Todos os agentes</option><option value="agent">Agente específico</option><option value="task">Somente tarefa</option></select></label>
+            <label className="mhq-field"><span>Tipo</span><select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}><option value="guideline">Diretriz</option><option value="brand_voice">Voz da marca</option><option value="audience">Público</option><option value="offer">Oferta</option><option value="example_pattern">Padrão de exemplo</option><option value="restriction">Restrição</option></select></label>
           </div>
           <button className="mhq-btn" disabled={busy}>Enviar como rascunho</button>
         </form>
@@ -475,9 +475,9 @@ function ActivityLog({ rows, error }: { rows: Row[]; error?: string | undefined 
         <ul className="mhq-list">{rows.slice(0, 200).map((r) => (
           <li key={r.id} className="mhq-plain mhq-log">
             <time>{fmtDate(pick(r, "created_at"))}</time>
-            <b>{text(r, "action", "event", "event_type", "type") || "evento"}</b>
+            <b>{text(r, "event_type", "action", "event", "type") || "evento"}</b>
             <span className="mhq-muted">{text(r, "actor", "actor_type", "agent_role")}</span>
-            {pick(r, "details", "metadata") !== undefined && <details><summary>Detalhes</summary><Content value={pick(r, "details", "metadata")} /></details>}
+            {pick(r, "metadata_json", "details", "metadata") !== undefined && <details><summary>Detalhes</summary><Content value={pick(r, "details", "metadata")} /></details>}
           </li>))}</ul>)}
     </section>
   );
