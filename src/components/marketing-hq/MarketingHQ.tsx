@@ -213,7 +213,7 @@ function NewTaskForm({ run }: { run: Run }) {
 function TaskItem({ task, onOpen }: { task: Row; onOpen: () => void }) {
   return (
     <li><button className="mhq-item" onClick={onOpen}>
-      <span className="mhq-item-main"><b>{text(task, "title") || text(task.brief as Row, "title") || "Sem título"}</b>
+      <span className="mhq-item-main"><b>{text(task, "title") || text(pick(task, "brief_json", "brief") as Row, "title") || "Sem título"}</b>
         <small>Criada {fmtDate(pick(task, "created_at"))} · Atualizada {fmtDate(pick(task, "updated_at"))}</small></span>
       <Status value={text(task, "status")} />
     </button></li>
@@ -250,7 +250,7 @@ function TaskDetail({ id, data, run, back }: { id: string; data: MhqData; run: R
   if (!task) return <Empty>Tarefa não encontrada. <button className="mhq-link" onClick={back}>Voltar</button></Empty>;
   const status = text(task, "status").toLowerCase();
   const steps = data.steps.filter((s) => text(s, "task_id") === id)
-    .sort((a, b) => Number(pick(a, "position", "sequence", "step_order", "order") ?? 0) - Number(pick(b, "position", "sequence", "step_order", "order") ?? 0) || String(pick(a, "created_at")).localeCompare(String(pick(b, "created_at"))));
+    .sort((a, b) => Number(pick(a, "sequence", "position", "step_order", "order") ?? 0) - Number(pick(b, "sequence", "position", "step_order", "order") ?? 0) || String(pick(a, "created_at")).localeCompare(String(pick(b, "created_at"))));
   const creatives = data.creatives.filter((c) => text(c, "task_id") === id).sort((a, b) => Number(pick(b, "version") ?? 0) - Number(pick(a, "version") ?? 0));
   const approvals = data.approvals.filter((a) => text(a, "task_id") === id);
   const err = text(task, "error_message", "error", "last_error");
@@ -277,7 +277,7 @@ function TaskDetail({ id, data, run, back }: { id: string; data: MhqData; run: R
             <li key={s.id}>
               <span className="mhq-step-n">{i + 1}</span>
               <div><b>{text(s, "step_key", "agent_role", "agent_key", "agent", "role", "name", "step") || "Etapa"}</b>
-                <small>Início {fmtDate(pick(s, "started_at", "created_at"))} · Fim {fmtDate(pick(s, "completed_at", "finished_at"))}{pick(s, "attempt", "attempts") !== undefined ? ` · Tentativa ${text(s, "attempt", "attempts")}` : ""}</small>
+                <small>Início {fmtDate(pick(s, "started_at", "created_at"))} · Fim {fmtDate(pick(s, "finished_at", "completed_at"))}{pick(s, "attempt_count", "attempt", "attempts") !== undefined ? ` · Tentativa ${text(s, "attempt_count", "attempt", "attempts")}` : ""}</small>
                 {text(s, "error_message", "error") && <small className="mhq-err">{text(s, "error_message", "error")}</small>}
               </div>
               <Status value={text(s, "status")} />
@@ -338,12 +338,12 @@ function ApprovalCard({ a, data, run, openTask }: { a: Row; data: MhqData; run: 
         <b>{text(task, "title") || "Tarefa"} · v{text(a, "version", "creative_version") || text(creative, "version") || "?"}</b>
         <Status value={text(a, "status")} />
       </div>
-      <Hash value={text(a, "content_hash") || text(creative, "content_hash", "hash")} />
-      {creative && text(a, "content_hash") && text(creative, "content_hash") && text(a, "content_hash") !== text(creative, "content_hash") &&
+      <Hash value={text(a, "payload_hash", "content_hash") || text(creative, "content_hash", "hash")} />
+      {creative && text(a, "payload_hash") && text(creative, "content_hash") && text(a, "payload_hash") !== text(creative, "content_hash") &&
         <p className="mhq-alert">O conteúdo não corresponde ao hash aprovado. Esta aprovação não é válida.</p>}
       <p className="mhq-muted">Solicitada {fmtDate(pick(a, "requested_at", "created_at"))}{pick(a, "decided_at") ? ` · Decidida ${fmtDate(pick(a, "decided_at"))}` : ""}</p>
       <details className="mhq-details" open={pending}><summary>Pacote final exato</summary><Content value={pick(creative, "content_json", "content", "body", "final_package", "payload") ?? pick(a, "action_payload", "package", "snapshot")} /></details>
-      {text(a, "decision_note", "note") && <p className="mhq-muted">Nota: {text(a, "note", "decision_note")}</p>}
+      {text(a, "decision_note", "note") && <p className="mhq-muted">Nota: {text(a, "decision_note", "note")}</p>}
       {openTask && task && <button className="mhq-link" onClick={() => openTask(task.id)}>Ver tarefa completa</button>}
       {pending && (
         <div className="mhq-form">
@@ -395,7 +395,7 @@ function Knowledge({ data, errors, run }: { data: MhqData; errors: MhqErrors; ru
           <label className="mhq-field"><span>Título</span><input maxLength={140} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
           <label className="mhq-field"><span>Conteúdo</span><textarea rows={3} maxLength={4000} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></label>
           <div className="mhq-row">
-            <label className="mhq-field"><span>Escopo</span><select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="global">Todos os agentes</option><option value="agent">Agente específico</option><option value="task">Somente tarefa</option></select></label>
+            <label className="mhq-field"><span>Escopo</span><select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="global">Todos os agentes</option></select></label>
             <label className="mhq-field"><span>Tipo</span><select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}><option value="guideline">Diretriz</option><option value="brand_voice">Voz da marca</option><option value="audience">Público</option><option value="offer">Oferta</option><option value="example_pattern">Padrão de exemplo</option><option value="restriction">Restrição</option></select></label>
           </div>
           <button className="mhq-btn" disabled={busy}>Enviar como rascunho</button>
@@ -438,7 +438,6 @@ function KnowledgeCandidate({ k, run }: { k: Row; run: Run }) {
       <div className="mhq-actions">
         <button className="mhq-btn" disabled={busy} onClick={() => decide("approved")}>{content.trim() !== original.trim() ? "Editar e aprovar" : "Aprovar"}</button>
         <button className="mhq-btn mhq-btn--danger" disabled={busy} onClick={() => decide("rejected")}>Rejeitar</button>
-        <button className="mhq-btn mhq-btn--ghost" disabled={busy} onClick={() => decide("archived")}>Arquivar</button>
       </div>
     </article>
   );
@@ -476,8 +475,8 @@ function ActivityLog({ rows, error }: { rows: Row[]; error?: string | undefined 
           <li key={r.id} className="mhq-plain mhq-log">
             <time>{fmtDate(pick(r, "created_at"))}</time>
             <b>{text(r, "event_type", "action", "event", "type") || "evento"}</b>
-            <span className="mhq-muted">{text(r, "actor", "actor_type", "agent_role")}</span>
-            {pick(r, "metadata_json", "details", "metadata") !== undefined && <details><summary>Detalhes</summary><Content value={pick(r, "details", "metadata")} /></details>}
+            <span className="mhq-muted">{text(r, "actor_type", "actor", "agent_role")}</span>
+            {pick(r, "metadata_json", "details", "metadata") !== undefined && <details><summary>Detalhes</summary><Content value={pick(r, "metadata_json", "details", "metadata")} /></details>}
           </li>))}</ul>)}
     </section>
   );
