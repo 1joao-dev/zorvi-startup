@@ -1204,7 +1204,12 @@ const leafletUserLocationLayerRef = useRef<LeafletLayerGroup|null>(null);
         google_place_id: row.store_google_place_id ? String(row.store_google_place_id) : null,
         google_match_status: row.store_google_match_status ? String(row.store_google_match_status) : null,
         google_checked_at: row.store_google_checked_at ? String(row.store_google_checked_at) : null,
-        google_verified_at: row.store_google_verified_at ? String(row.store_google_verified_at) : null
+        google_verified_at: row.store_google_verified_at ? String(row.store_google_verified_at) : null,
+        source_url: null,
+        source_label: null,
+        osm_type: null,
+        osm_id: null,
+        osm_last_seen_at: null
       },
       product: { id: product.id, name: product.name, brand: product.brand, variant: product.variant, unit: product.unit, category: product.category }
     })).filter((row) =>
