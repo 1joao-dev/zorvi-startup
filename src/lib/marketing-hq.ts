@@ -73,7 +73,7 @@ export function validateBrief(b: Brief): Record<string, string> {
   const t = b.title.trim();
   if (t.length < 3) e["title"] = "Informe um título com pelo menos 3 caracteres.";
   else if (t.length > BRIEF_LIMITS.title) e["title"] = `Máximo de ${BRIEF_LIMITS.title} caracteres.`;
-  if (b.objective.trim().length < 10) e["objective"] = "Descreva o objetivo com pelo menos 10 caracteres.";
+  if (b.objective.trim().length < 5) e["objective"] = "Descreva o objetivo com pelo menos 10 caracteres.";
   for (const k of ["objective", "audience", "offer", "restrictions", "brand_context"] as const) {
     if (b[k].length > BRIEF_LIMITS.field) e[k] = `Máximo de ${BRIEF_LIMITS.field} caracteres.`;
   }
