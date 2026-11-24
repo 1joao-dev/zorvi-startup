@@ -141,3 +141,57 @@ Todas as funções devem ser autenticadas, validar tamanho/tipo do payload, apli
 3. Implementar Edge Functions do orquestrador e Copywriter no servidor.
 4. Implementar aprovação e auditoria.
 5. Executar testes e build antes de qualquer integração externa.
+
+
+## Aprendizado supervisionado — decisão do proprietário
+
+**Regra definitiva:** nenhum conhecimento novo se torna memória permanente automaticamente. Todo conhecimento candidato exige aprovação explícita do proprietário antes de ser promovido.
+
+### Como o agente aprende
+
+1. Agentes podem identificar padrões em feedback, correções, resultados e exemplos.
+2. O agente cria um **candidato de conhecimento** em estado `draft`, incluindo:
+   - conteúdo sugerido;
+   - agente e escopo a que se aplica;
+   - origem (tarefa, feedback, exemplo ou correção);
+   - justificativa e evidências;
+   - riscos, conflitos ou duplicatas detectados;
+   - versão e data de criação.
+3. O candidato aparece na área **Treinamento / Conhecimento pendente** do Marketing HQ.
+4. O proprietário pode aprovar, rejeitar ou editar o candidato.
+5. Somente a decisão explícita de aprovação do proprietário promove o item para `approved` e o torna recuperável como memória permanente.
+6. Se o proprietário editar o candidato, a versão editada é a que será aprovada; mudanças posteriores criam nova versão e exigem nova aprovação.
+7. Itens rejeitados permanecem auditáveis como `rejected`, mas nunca entram no contexto de geração.
+8. Conhecimentos aprovados podem ser arquivados ou revogados pelo proprietário. A revogação impede novas recuperações, sem apagar o histórico de auditoria.
+
+### Regras de recuperação
+
+- Agentes só podem recuperar conhecimento com status `approved`, pertencente ao mesmo proprietário e dentro do escopo do agente/tarefa.
+- Conhecimentos `draft`, `rejected` ou `archived` nunca entram no prompt de execução como instrução ou memória.
+- Feedback bruto pode ser usado como dado de tarefa, mas não como regra permanente.
+- Uma sugestão de aprendizado nunca altera instruções de sistema, permissões, políticas de segurança, limites de autonomia ou regras de aprovação.
+- Conflitos entre conhecimentos aprovados devem ser sinalizados; não escolher silenciosamente a regra mais recente quando o conflito alterar estratégia ou política. Solicitar decisão do proprietário.
+- Conhecimento global compartilhado entre agentes exige aprovação explícita e escopo global selecionado pelo proprietário; o padrão é escopo individual do agente.
+
+### Interface e auditoria
+
+- Mostrar fila de candidatos com origem, escopo, conteúdo anterior/novo, justificativa e possíveis conflitos.
+- Disponibilizar ações **Aprovar**, **Editar e aprovar**, **Rejeitar** e **Arquivar**.
+- Registrar quem decidiu, quando, versão/hash aprovada e comentário opcional.
+- Exibir separadamente conhecimento aprovado e candidatos pendentes.
+- O escritório pode mostrar o agente em estado `waiting_approval` quando a tarefa depender de uma decisão de treinamento, mas outras tarefas independentes podem continuar.
+
+### Dados adicionais
+
+O modelo `marketing_knowledge` deve incluir estados `draft | approved | rejected | archived`, origem rastreável, escopo, versão, hash do conteúdo, autor/agente proponente, aprovador, timestamp e comentário da decisão. A tabela `marketing_feedback` pode referenciar o candidato, mas não pode promovê-lo automaticamente.
+
+### Testes obrigatórios de aprendizado
+
+1. Conhecimento recém-gerado fica em `draft` e não é recuperado por agentes.
+2. Aprovação por usuário proprietário autorizado promove exatamente a versão revisada.
+3. Rejeição mantém o candidato fora do contexto dos agentes.
+4. Edição posterior cria nova versão e invalida aprovação anterior.
+5. Um agente não consegue aprovar, promover, arquivar ou alterar o estado de um conhecimento.
+6. Um usuário não consegue aprovar conhecimento pertencente a outro owner.
+7. Conhecimento de um agente não vaza para outro sem escopo compartilhado explicitamente aprovado.
+8. Feedback, exemplos e conteúdo de arquivos nunca alteram automaticamente regras permanentes.
