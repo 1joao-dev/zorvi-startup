@@ -73,7 +73,11 @@ function Dashboard() {
   const run = useCallback(async (body: Record<string, unknown>, okMsg: string) => {
     setFlash(null);
     const r = await invokeMarketing(body);
-    setFlash(r.ok ? { kind: "ok", msg: okMsg } : { kind: "err", msg: r.error });
+    const resultData = r.ok && r.data && typeof r.data === "object" ? r.data as Record<string, unknown> : null;
+    const savedBriefOnly = body.action === "create_task" && resultData?.mode === "brief_saved";
+    setFlash(r.ok
+      ? { kind: "ok", msg: savedBriefOnly ? "Briefing salvo na fila. Os agentes ficam aguardando a configuração da API Gemini; nenhuma execução de IA foi simulada." : okMsg }
+      : { kind: "err", msg: r.error });
     await refresh();
     return r;
   }, [refresh]);
@@ -159,7 +163,7 @@ function NewTaskForm({ run }: { run: Run }) {
     if (Object.keys(v).length) return;
     setBusy(true);
     const brief = { ...b, title: b.title.trim(), objective: b.objective.trim(), deadline: b.deadline || null };
-    const r = await run({ action: "create_task", brief, priority }, "Tarefa criada. Copywriter e Revisor concluíram a execução; confira a aprovação pendente.");
+    const r = await run({ action: "create_task", brief, priority }, "Tarefa enviada para execução. Confira o andamento no quadro de tarefas.");
     setBusy(false);
     if (r.ok) setB(empty);
   };
@@ -203,8 +207,8 @@ function NewTaskForm({ run }: { run: Run }) {
         </div>
         <label className="mhq-check"><input type="checkbox" checked={b.visual_required} onChange={(e) => set("visual_required", e.target.checked)} />
           <span>Precisa de peça visual <small>(gera briefing de Designer e checklist de Editor; não gera imagens)</small></span></label>
-        <button className="mhq-btn" disabled={busy}>{busy ? <><Loader2 size={16} className="mhq-spin" /> Executando agentes…</> : "Criar e executar tarefa"}</button>
-        {busy && <p className="mhq-muted" role="status">Aguardando o servidor concluir Copywriter e Revisor. Isso pode levar alguns segundos.</p>}
+        <button className="mhq-btn" disabled={busy}>{busy ? <><Loader2 size={16} className="mhq-spin" /> Salvando briefing…</> : "Enviar briefing"}</button>
+        {busy && <p className="mhq-muted" role="status">O servidor registra o briefing e informa se os agentes podem executar ou precisam aguardar a chave de IA.</p>}
       </form>
     </section>
   );
