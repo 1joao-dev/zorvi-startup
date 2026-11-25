@@ -1,22 +1,35 @@
-# Equipe ZORVI — responsabilidades e evidências
+# Equipe ZORVI — integrantes, responsabilidades e evidências
 
-Este documento registra as frentes de trabalho do projeto e deve ser completado com os nomes reais dos integrantes antes da apresentação. Os papéis abaixo seguem a divisão definida no material acadêmico da ZORVI. Não atribua uma contribuição individual sem confirmação da própria equipe e evidência correspondente.
+A equipe da ZORVI é formada por cinco integrantes dos cursos de Engenharia da Computação e Análise e Desenvolvimento de Sistemas (ADS).
 
-| Integrante | Frente | Responsabilidades | Evidências técnicas sugeridas |
-|---|---|---|---|
-| **[Nome a confirmar]** | Engenharia de Software | Visão do produto, problema, público, prioridades, backlog e critérios de aceite | Escopo do MVP, requisitos, histórias de usuário e decisões de produto |
-| **[Nome a confirmar]** | Tech Lead | Arquitetura, stack, padrões de código, integração e revisão técnica | Arquitetura, estrutura do projeto, decisões técnicas e revisão de PRs |
-| **[Nome a confirmar]** | Programador | Telas, navegação, mapa, busca, feed e chat | Componentes React, rotas, estilos e fluxos da aplicação |
-| **[Nome a confirmar]** | DevOps | Ambiente, banco, funções serverless, deploy e operação segura | Schema SQL, migrations, Edge Functions, CI e deploy |
-| **[Nome a confirmar]** | QA e UX | Testes, protótipo, usabilidade, validação de preços e revisão | Casos de teste, testes automatizados, critérios de qualidade e revisão |
+## Integrantes
 
-## Como preencher antes da banca
+| Integrante | Formação | Frente de atuação |
+|---|---|---|
+| **João Victor Rocha Tomaz da Silva** | Engenharia da Computação | A definir pela equipe |
+| **Andre Yally** | Engenharia da Computação | A definir pela equipe |
+| **Julio Gabriel Santos Silva** | Análise e Desenvolvimento de Sistemas (ADS) | A definir pela equipe |
+| **Carlos Eduardo Silva Nunes** | Análise e Desenvolvimento de Sistemas (ADS) | A definir pela equipe |
+| **Charles Chapplin Lima Figueira** | Engenharia da Computação | A definir pela equipe |
 
-1. Substituir cada marcador pelo nome completo do integrante.
-2. Confirmar com cada pessoa a frente que efetivamente liderou ou executou.
-3. Registrar contribuições compartilhadas quando houver.
-4. Relacionar cada contribuição a arquivos, Pull Requests, commits, testes, protótipos ou documentos verificáveis.
-5. Não usar quantidade de commits isoladamente como medida de contribuição.
+## Frentes de trabalho do projeto
+
+As cinco frentes abaixo seguem a divisão definida no material acadêmico da ZORVI. A associação nominal será preenchida após confirmação dos próprios integrantes, para que o documento represente fielmente a contribuição individual.
+
+| Frente | Responsabilidades | Evidências técnicas sugeridas |
+|---|---|---|
+| **Engenharia de Software** | Visão do produto, problema, público, prioridades, backlog e critérios de aceite | Escopo do MVP, requisitos, histórias de usuário e decisões de produto |
+| **Tech Lead** | Arquitetura, stack, padrões de código, integração e revisão técnica | Arquitetura, estrutura do projeto, decisões técnicas e revisão de PRs |
+| **Programador** | Telas, navegação, mapa, busca, feed e chat | Componentes React, rotas, estilos e fluxos da aplicação |
+| **DevOps** | Ambiente, banco, funções serverless, deploy e operação segura | Schema SQL, migrations, Edge Functions, CI e deploy |
+| **QA e UX** | Testes, protótipo, usabilidade, validação de preços e revisão | Casos de teste, testes automatizados, critérios de qualidade e revisão |
+
+## Como fechar a divisão antes da apresentação
+
+1. Confirmar qual frente cada integrante liderou ou executou.
+2. Registrar contribuições compartilhadas quando houver.
+3. Relacionar cada contribuição a arquivos, Pull Requests, commits, testes, protótipos ou documentos verificáveis.
+4. Não usar quantidade de commits isoladamente como medida de contribuição.
 
 ## Evidências por área
 
@@ -26,4 +39,4 @@ Este documento registra as frentes de trabalho do projeto e deve ser completado 
 - **DevOps:** `supabase/`, `.github/workflows/` e pipeline de deploy.
 - **QA e UX:** `src/test/`, validação de fluxos e critérios de revisão.
 
-> A divisão de responsabilidades descreve as frentes do trabalho. A atribuição nominal e a contribuição individual precisam ser confirmadas pela equipe.
+> Os nomes e cursos foram informados pela equipe. As frentes de atuação permanecem pendentes de confirmação; não foram atribuídas automaticamente.
