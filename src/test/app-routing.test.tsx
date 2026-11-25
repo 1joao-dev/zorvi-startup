@@ -14,4 +14,10 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches the isolated Marketing HQ route", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    const matches = router.matchRoutes("/marketing-hq");
+    expect(matches.at(-1)?.routeId).toBe("/marketing-hq");
+  });
 });
