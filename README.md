@@ -1,145 +1,270 @@
+<div align="center">
+
 # ZORVI
 
-**Tudo se conecta. Tudo se descobre.**
+### Tudo se conecta. Tudo se descobre.
 
-A ZORVI é uma experiência social mobile-first para descobrir pessoas, estabelecimentos, produtos, preços, promoções e experiências em um só lugar.
+**Plataforma de descoberta local, comunidade e comparação de preços.**
 
-## Experiência atual
+[![Beta](https://img.shields.io/badge/status-beta-8B5CF6?style=for-the-badge)](https://github.com/joaosystemss/startup-em-movimento)
+[![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Backend-3FCF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
+[![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com/)
 
-- **Início:** feed da comunidade, publicações demonstrativas, curtidas, favoritos e criação de post.
-- **Mapa:** base vetorial escura, geolocalização, filtros por categoria, marcadores agrupados e pesquisa de preços.
-- **ZORVI AI:** chat conectado à Edge Function `zorvi-ai`, com consulta ao catálogo real e aos preços verificados; usa o Lovable AI Gateway no servidor quando a chave do projeto está disponível e mantém busca direta do catálogo como fallback.
-- **Explorar:** categorias e atalhos para descobertas.
-- **Perfil:** perfil demonstrativo, itens salvos e alternância entre tema escuro e claro.
+[Aplicação](https://github.com/joaosystemss/startup-em-movimento) · [Código-fonte](https://github.com/joaosystemss/startup-em-movimento) · [Documentação](docs/)
 
-## Stack
+</div>
 
-- React 19 + TypeScript
-- TanStack Start / Router
-- Vite
-- Tailwind CSS v4
-- Lucide React
-- Leaflet + MapLibre GL Leaflet + OpenFreeMap para o mapa vetorial.
+---
 
-## Desenvolvimento local
+## 1. Visão geral
 
-Requer Node.js e npm (ou Bun).
+A **ZORVI** é uma aplicação web mobile-first criada para aproximar pessoas, estabelecimentos e informações úteis da sua região. A proposta reúne descoberta local, mapa, catálogo de produtos, consulta e comparação de preços, recursos de inteligência artificial e interação comunitária em uma única experiência.
 
-```sh
+O projeto está em **fase beta**. O objetivo desta etapa é validar os principais fluxos, a qualidade das informações e a experiência de uso antes de uma expansão mais ampla.
+
+### Problema que buscamos resolver
+
+Encontrar um estabelecimento, localizar um produto e entender onde existe uma oferta relevante costuma exigir pesquisas em diferentes aplicativos, mapas e fontes. Além disso, preços sem origem, data ou contexto podem induzir a comparações incorretas.
+
+### Proposta de valor
+
+- Centralizar a descoberta de estabelecimentos e produtos locais.
+- Facilitar a consulta de preços com origem, data e critérios de confiança.
+- Ajudar o usuário a explorar opções por localização e categoria.
+- Conectar descoberta local e participação da comunidade.
+- Usar IA como apoio à pesquisa, sem substituir a verificação das informações.
+
+## 2. Funcionalidades do produto
+
+| Módulo | Objetivo | Situação no beta |
+|---|---|---|
+| Início e comunidade | Feed, criação de publicações e interação | Interface implementada; parte do conteúdo pode ser demonstrativa |
+| Mapa | Explorar estabelecimentos e pontos de interesse | Implementado com geolocalização e filtros |
+| Catálogo | Consultar produtos e informações de referência | Implementado com fontes e rotinas de importação |
+| Comparação de preços | Consultar observações associadas a produtos e estabelecimentos | Implementado com regras de atualização e revisão |
+| ZORVI AI | Consultar catálogo e apoiar a descoberta por linguagem natural | Integração implementada; depende da configuração dos serviços e limites de API |
+| Perfil e autenticação | Identidade e acesso do usuário | Integração com Supabase Auth |
+| Moderação de preços | Revisar observações antes de entrarem nas comparações | Painel e função de revisão implementados |
+| Marketing HQ | Organizar tarefas, agentes e conhecimento supervisionado | Interface e backend em evolução; execução de IA depende da configuração da chave Gemini |
+
+> **Transparência do beta:** a presença de um módulo na interface não significa que todas as integrações estejam habilitadas em produção. Dados demonstrativos são distintos de preços verificados. A ZORVI não presume estoque ou disponibilidade a partir de uma observação de preço.
+
+## 3. Arquitetura e tecnologias
+
+### Stack principal
+
+| Camada | Tecnologias |
+|---|---|
+| Interface | React 19, TypeScript |
+| Aplicação e rotas | TanStack Start, TanStack Router |
+| Build e desenvolvimento | Vite |
+| Estilização | Tailwind CSS v4 e CSS |
+| Componentes e ícones | Radix UI, Lucide React |
+| Dados e autenticação | Supabase, PostgreSQL, Supabase Auth |
+| Backend serverless | Supabase Edge Functions (Deno) |
+| Mapas | MapLibre GL / Leaflet, OpenStreetMap e OpenFreeMap |
+| Hospedagem e deploy | Vercel |
+| Versionamento e CI | GitHub, GitHub Actions |
+| Catálogos externos | Open Food Facts, dados abertos da ANVISA e fontes de preços integradas |
+
+### Visão simplificada da arquitetura
+
+```mermaid
+flowchart TD
+    U[Pessoa usuária] --> WEB[ZORVI Web App]
+    WEB --> AUTH[Supabase Auth]
+    WEB --> DB[(PostgreSQL / Supabase)]
+    WEB --> MAP[Mapas e geolocalização]
+    WEB --> EF[Supabase Edge Functions]
+    EF --> CAT[Catálogo e fontes de preços]
+    EF --> AI[Serviços de IA]
+    EF --> REVIEW[Revisão e moderação]
+    GH[GitHub] --> CI[GitHub Actions]
+    CI --> V[Vercel]
+    V --> WEB
+```
+
+A interface acessa os serviços por meio das integrações previstas no projeto. Operações privilegiadas e segredos devem permanecer no servidor, nunca no código entregue ao navegador.
+
+## 4. Organização do repositório
+
+```text
+startup-em-movimento/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── docs/
+│   └── marketing-hq/
+├── public/
+├── scripts/
+├── src/
+│   ├── components/
+│   │   ├── marketing-hq/
+│   │   └── ui/
+│   ├── hooks/
+│   ├── lib/
+│   ├── routes/
+│   ├── styles/
+│   └── test/
+├── supabase/
+│   ├── functions/
+│   ├── migrations/
+│   └── schema.sql
+├── .env.example
+├── package.json
+└── README.md
+```
+
+### Principais funções serverless
+
+| Função | Responsabilidade |
+|---|---|
+| `zorvi-ai` | Endpoint de inteligência artificial e consultas assistidas |
+| `catalog-import` | Importação de observações de preços |
+| `retail-catalog-sync` | Sincronização de catálogos varejistas integrados |
+| `osm-store-discovery` | Descoberta de estabelecimentos a partir de dados geográficos |
+| `geocode-stores` | Associação e verificação de estabelecimentos |
+| `price-review` | Aprovação e rejeição de observações de preços |
+| `zorvi-admin-monitor` | Monitoramento administrativo |
+| `marketing-hq` | Orquestração do fluxo interno de marketing e conhecimento supervisionado |
+
+## 5. Dados, confiança e segurança
+
+A comparação de preços só é útil quando o usuário consegue entender o contexto da informação. Por isso, o projeto considera:
+
+- **Origem:** identificar a fonte e o estabelecimento associado.
+- **Data:** considerar quando o preço foi observado e a janela de atualização.
+- **Revisão:** separar observações pendentes das aprovadas.
+- **Correspondência:** evitar comparar produtos, variantes ou unidades incompatíveis.
+- **Disponibilidade:** não inferir estoque a partir de um preço.
+- **Proteção:** aplicar autenticação, políticas de acesso (RLS) e operações privilegiadas no servidor.
+
+### Fontes de dados
+
+- **Open Food Facts:** metadados colaborativos de produtos; não é fonte de preço local nem de estoque.
+- **ANVISA:** dados regulatórios de medicamentos; registro não comprova comercialização ou disponibilidade em uma loja.
+- **Open Prices e catálogos integrados:** observações e ofertas sujeitas a critérios de correspondência, origem, atualização e revisão.
+
+A cidade-piloto documentada para a coleta de preços é **Teresina, Piauí**. A expansão geográfica depende da validação da cobertura e da qualidade dos dados.
+
+## 6. Executar localmente
+
+### Pré-requisitos
+
+- Node.js compatível com as dependências do projeto.
+- npm.
+- Projeto Supabase para habilitar autenticação e recursos conectados.
+
+### Instalação
+
+```bash
 git clone https://github.com/joaosystemss/startup-em-movimento.git
 cd startup-em-movimento
 npm install
+```
+
+Crie um arquivo `.env.local` a partir do exemplo:
+
+```bash
+cp .env.example .env.local
+```
+
+Configure as variáveis públicas do Supabase:
+
+```env
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=SUA_CHAVE_PUBLICA_ANON_OU_PUBLISHABLE
+```
+
+Inicie o ambiente:
+
+```bash
 npm run dev
 ```
 
-Comandos úteis:
+### Comandos de qualidade
 
-```sh
+```bash
 npm run build
 npm run lint
 npm test
 ```
 
-## Supabase: autenticação e perfis
+### Sincronização de catálogos
 
-A primeira integração está preparada para Supabase Auth e perfis.
+Os scripts de importação exigem credenciais administrativas do Supabase no terminal. Consulte os comentários e instruções dos scripts antes de executar. Nunca coloque uma chave `service_role` em variáveis `VITE_*`, no frontend ou no Git.
 
-1. Crie um projeto em https://supabase.com.
-2. No SQL Editor, execute `supabase/schema.sql`.
-3. Copie `.env.example` para `.env.local` e preencha a URL e a chave pública (anon/publishable) do projeto.
-4. Reinicie `npm run dev`. Com as variáveis configuradas, o app passa a exigir login e oferece cadastro e recuperação de senha.
-5. Em Authentication > URL Configuration, adicione a URL local e a URL publicada à lista de Redirect URLs.
+## 7. Variáveis e segredos
 
-Nunca coloque a `service_role` key no frontend. Use somente a chave pública anon/publishable; a proteção dos dados é feita por RLS no banco.
+- `VITE_SUPABASE_URL`: URL pública do projeto Supabase.
+- `VITE_SUPABASE_ANON_KEY`: chave pública anon/publishable.
+- Chaves de provedores externos e credenciais administrativas: armazenar exclusivamente nos Secrets do ambiente servidor (Supabase Edge Functions/Vercel quando aplicável).
 
+**Nunca versionar** `.env.local`, tokens, senhas, chaves privadas ou credenciais `service_role`. O arquivo `.env.example` contém apenas nomes e valores ilustrativos.
 
-## Catálogo central de produtos
+## 8. Equipe e responsabilidades
 
-O catálogo de produtos é separado dos preços por estabelecimento: cadastrar um produto não significa que uma loja o venda, tenha estoque ou pratique determinado preço.
+O desenvolvimento é organizado em cinco frentes, alinhadas às entregas técnicas e acadêmicas do projeto:
 
-- **Catálogo de referência ZORVI:** inclui produtos comuns de mercearia, hortifruti, limpeza, higiene e cuidados pessoais para melhorar o reconhecimento de buscas.
-- **Open Food Facts:** a ZORVI AI pode procurar alimentos que ainda não estejam no catálogo e importar metadados públicos associados a produtos do Brasil. A fonte não fornece preço local nem estoque. A base é colaborativa e licenciada sob ODbL; consulte a atribuição e os termos antes de redistribuir os dados.
-- **ANVISA:** o importador local permite carregar a base oficial de medicamentos registrados. O registro regulatório não é uma cotação nem confirma comercialização em uma farmácia.
+| Frente | Responsabilidade | Evidência no repositório |
+|---|---|---|
+| Engenharia de Software | Visão do produto, problema, público, prioridades, backlog e critérios de aceite | README, escopo e documentação do produto |
+| Tech Lead | Arquitetura, stack, padrões, integração e revisão técnica | Estrutura da aplicação, arquitetura e decisões técnicas |
+| Programador | Telas, navegação, mapa, busca, feed e chat | `src/routes/`, `src/components/`, `src/styles/` |
+| DevOps | Ambiente, banco, funções serverless, deploy e operação segura | `supabase/`, `.github/workflows/` e configuração de deploy |
+| QA e UX | Testes, protótipo, usabilidade, validação e revisão | `src/test/`, critérios de confiança e fluxos de revisão |
 
-### Sincronizar as bases públicas
+**Nomes dos integrantes:** ainda precisam ser associados às cinco frentes. Consulte [docs/EQUIPE.md](docs/EQUIPE.md) para preencher os nomes reais e registrar a contribuição individual sem atribuir trabalho incorretamente.
 
-Os dois comandos precisam de acesso administrativo ao Supabase. Use as variáveis somente no terminal local; **nunca** coloque a chave service role no navegador, em código frontend ou no GitHub.
+## 9. Qualidade e integração contínua
 
-Depois de clonar o repositório e instalar as dependências com `npm install`, execute no PowerShell:
+O workflow em `.github/workflows/ci.yml` executa, em eventos de push e pull request para `main`:
 
-```powershell
-$env:SUPABASE_URL="https://SEU-PROJETO.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY="SUA_CHAVE_SERVICE_ROLE"
-npm run catalog:sync:all
+1. Checkout do repositório.
+2. Instalação do Bun.
+3. Instalação das dependências.
+4. Testes automatizados.
+5. Build de produção.
+6. Verificação sintática dos scripts de importação.
 
-# Ou execute separadamente:
-npm run catalog:sync:open-food-facts
-npm run catalog:sync:anvisa
-```
+A publicação é integrada à Vercel a partir do repositório. O status final de cada deploy deve ser conferido no painel da Vercel.
 
-O sincronizador do Open Food Facts consulta termos comuns do Brasil e respeita uma pausa entre requisições para observar o limite público da API. O importador da ANVISA baixa o arquivo oficial atualizado mensalmente e importa os registros em lotes.
+## 10. Roadmap do beta
 
-Fontes:
-- Open Food Facts API: https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/
-- ANVISA — dados abertos: https://dados.anvisa.gov.br/dados/
-- ANVISA — dicionário de dados de medicamentos: https://dados.anvisa.gov.br/dados/Documentacao_e_Dicionario_de_Dados_MEDICAMENTOS.pdf
+- [x] Estrutura inicial da aplicação e navegação.
+- [x] Integração com Supabase e autenticação.
+- [x] Mapa, descoberta e filtros.
+- [x] Catálogo e funções de importação.
+- [x] Fluxo de revisão de preços.
+- [x] Pipeline de build e testes no GitHub Actions.
+- [ ] Ampliar testes ponta a ponta com usuários.
+- [ ] Concluir configuração e validação da API Gemini no Marketing HQ.
+- [ ] Consolidar persistência e moderação das interações comunitárias.
+- [ ] Medir cobertura, atualização e precisão das informações por região.
+- [ ] Validar proposta de valor e modelo de negócio com usuários e estabelecimentos.
 
-## Próximas integrações
+## 11. Contribuição
 
-1. Persistência de publicações, curtidas e comentários no Supabase.
-2. Ampliar a cobertura de geocodificação e a precisão das coordenadas dos estabelecimentos.
-3. Ampliar o catálogo com fontes verificadas de preços, estabelecimentos e promoções.
-4. Adicionar histórico persistente de conversas da ZORVI AI, com controles de privacidade.
+1. Crie uma branch para sua alteração.
+2. Faça mudanças pequenas e documentadas.
+3. Execute testes e build localmente.
+4. Abra um Pull Request descrevendo objetivo, arquivos alterados e evidências.
+5. Aguarde revisão antes de integrar à `main`.
 
-**Importante:** o chat ZORVI AI consulta o catálogo e só utiliza preços verificados dos últimos 30 dias. Quando não há preço confirmado, o agente informa a limitação. O histórico de conversa ainda fica apenas na sessão atual. Alguns conteúdos de feed e elementos de demonstração ainda não representam dados comerciais verificados.
+Padrão sugerido de commits: `feat:`, `fix:`, `docs:`, `test:`, `refactor:` e `chore:`.
 
-## Google Places: referência de estabelecimentos
+## 12. Licença e uso
 
-A função `geocode-stores` usa o Places API (New) para associar cada unidade a um `place_id` do Google. Somente o Place ID e o estado operacional da verificação são persistidos. Os nomes, endereços e coordenadas retornados pelo Google não são armazenados.
+Este repositório ainda não declara uma licença open source. Até que uma licença seja definida pelos responsáveis, não presuma autorização para redistribuir ou reutilizar o código. Dados e serviços de terceiros permanecem sujeitos às respectivas licenças e termos.
 
-O mapa principal continua usando MapLibre/OpenStreetMap; suas coordenadas são obtidas pelo Photon ou por correção manual. O Place ID gera um link que abre a unidade correspondente no Google Maps.
+---
 
-Para habilitar a associação:
+<div align="center">
 
-1. Ative **Places API (New)** no Google Cloud e configure o faturamento e limites de uso.
-2. Crie uma chave restrita à Places API (New).
-3. Cadastre a chave como Secret de Edge Functions no Supabase, com o nome `GOOGLE_MAPS_API_KEY`.
-4. Nunca coloque essa chave no frontend, no arquivo `.env` público ou no GitHub.
-5. Antes de disponibilizar a integração ao público, publique Termos de Uso e Política de Privacidade compatíveis com os requisitos do Google Maps Platform.
+**ZORVI — Tudo se conecta. Tudo se descobre.**
 
-A verificação é executada em lotes de cinco unidades e evita repetir consultas por 30 dias.
+*Versão beta • Projeto em evolução*
 
-## Coleta automática de preços — cidade-piloto
-
-A primeira região de coleta é **Teresina, PI**.
-
-- A função `catalog-import` consulta diariamente a fonte comunitária Open Prices.
-- A execução agendada ocorre às 06:00 no horário de Teresina (09:00 UTC).
-- Somente estabelecimentos verificados e geolocalizados da cidade-piloto entram na correspondência.
-- São importados apenas preços recentes em BRL, com correspondência exata de código de barras, estabelecimento/localização e evidência de etiqueta ou recibo.
-- Duplicatas são descartadas e disponibilidade/estoque nunca é inferida.
-- Observações comunitárias novas continuam pendentes para revisão; a coleta é automática, mas isso não transforma relatos comunitários em preços oficiais.
-- A expansão para outra cidade exige habilitar a nova região no escopo de coleta após a validação do piloto.
-
-## Moderação administrativa de preços
-
-O painel de moderação fica em **Perfil → Moderação de preços** e permite revisar observações antes de elas aparecerem nas comparações.
-
-- Entre com uma conta autenticada e informe o mesmo token administrativo validado pelo RPC `verify_catalog_import_token` usado pelo importador do catálogo.
-- O token é enviado somente ao Edge Function `price-review`; não é gravado no navegador nem no repositório.
-- O painel exibe produto, apresentação, estabelecimento, valor, data, disponibilidade e link da fonte.
-- A aprovação só é permitida quando o produto está ativo e o estabelecimento está verificado. A disponibilidade não é alterada pela aprovação.
-- Registros rejeitados permanecem no banco com status `rejected`, mas não entram nas comparações.
-- Preços aprovados continuam sujeitos à janela de atualização de 30 dias usada pela busca e pelo mapa.
-
-A função `price-review` exige JWT de uma sessão autenticada e valida o token administrativo no servidor. Nenhuma chave de serviço é enviada ao frontend.
-
-## Coleta automática de preços — Teresina
-
-- **Atacadão Online:** pesquisa regionalizada para o CEP 64045-840, somente vendedor oficial ATACADAO SA. O importador usa preço regular de tabela e não presume descontos por quantidade.
-- **Pague Menos Online:** pesquisa regionalizada para o CEP 64049-570, somente vendedor oficial Farmácias Pague Menos; ofertas de marketplace de terceiros são descartadas.
-- **Carvalho Supershop** e **Ferreira em Casa:** coleta dos catálogos oficiais VipCommerce, identificando organização, filial digital e centro de distribuição. Importa produtos disponíveis com EAN válido e considera preço promocional apenas quando a condição é unitária; faixas de preço por quantidade são ignoradas.
-- Os quatro canais digitais são registros separados de lojas físicas, não recebem coordenadas e não aparecem como pinos no mapa. Preços são identificados como ofertas online; estoque em uma filial física não é presumido.
-- A sincronização automática continua diária às 06:30 no horário de Teresina (09:30 UTC), executando todas as fontes ativas.
-- **Drogasil:** ainda pendente de credenciais oficiais. O portal da RD Saúde exige conta de desenvolvedor, credenciais de aplicação e liberação de produção; não foi ativado scraper pago ou acesso não autorizado.
-
+</div>
