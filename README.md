@@ -6,13 +6,13 @@
 
 **Plataforma de descoberta local, comunidade e comparação de preços.**
 
-[![Beta](https://img.shields.io/badge/status-beta-8B5CF6?style=for-the-badge)](https://github.com/joaosystemss/startup-em-movimento)
+[![Beta](https://img.shields.io/badge/status-beta-8B5CF6?style=for-the-badge)](https://github.com/joaosystemss/zorvi-startup)
 [![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Backend-3FCF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com/)
 
-[Aplicação](https://github.com/joaosystemss/startup-em-movimento) · [Código-fonte](https://github.com/joaosystemss/startup-em-movimento) · [Documentação](docs/)
+[Aplicação](https://github.com/joaosystemss/zorvi-startup) · [Código-fonte](https://github.com/joaosystemss/zorvi-startup) · [Documentação](docs/)
 
 </div>
 
@@ -91,7 +91,7 @@ A interface acessa os serviços por meio das integrações previstas no projeto.
 ## 4. Organização do repositório
 
 ```text
-startup-em-movimento/
+zorvi-startup/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml
@@ -160,8 +160,8 @@ A cidade-piloto documentada para a coleta de preços é **Teresina, Piauí**. A 
 ### Instalação
 
 ```bash
-git clone https://github.com/joaosystemss/startup-em-movimento.git
-cd startup-em-movimento
+git clone https://github.com/joaosystemss/zorvi-startup.git
+cd zorvi-startup
 npm install
 ```
 
